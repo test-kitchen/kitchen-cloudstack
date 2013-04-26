@@ -7,7 +7,7 @@ A Test Kitchen Driver for Apache CloudStack / Citrix CloudPlatform.
 This Gem only requires FOG of a version greater than 1.3.1. However, as most of your knife plugins will be using newer
 versions of FOG, that shouldn't be an issue.
 
-## <a name="installation"></a> Installation and Setup
+## <a name="installation">Installation and Setup</a>
 
 Please read the [Driver usage][driver_usage] page for more details.
 
@@ -24,6 +24,8 @@ Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
       template_id: [INSTANCE TEMPLATE ID]
       serviceoffering_id: [INSTANCE SERVICE OFFERING ID]
       zone_id: [INSTANCE ZONE ID]
+      network_id: [NETWORK ID FOR ISOLATED OR VPC NETWORKS]
+      security_group_id: [SECURITY GROUP ID FOR SHARED NETWORKS]
 
 By default, a unique server name will be generated and the randomly generated password will be used, though that
 behavior can be overridden with additional options (e.g., to specify a SSH private key):
