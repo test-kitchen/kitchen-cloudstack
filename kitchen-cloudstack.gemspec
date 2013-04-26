@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email         = ['fifthecho@gmail.com']
   spec.description   = %q{A Test Kitchen Driver for Cloudstack}
   spec.summary       = spec.description
-  spec.homepage      = ''
+  spec.homepage      = 'https://github.com/fifthecho/kitchen-cloudstack'
   spec.license       = 'Apache 2.0'
 
   spec.files         = `git ls-files`.split($/)
@@ -26,4 +26,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'cane'
   spec.add_development_dependency 'tailor'
   spec.add_development_dependency 'countloc'
+  spec.add_dependency 'fog', '>=1.3.1'
 end

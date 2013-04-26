@@ -1,22 +1,44 @@
-# <a name="title"></a> Kitchen::Cloudstack
+# <a name="title">Kitchen::CloudStack</a>
 
-A Test Kitchen Driver for Cloudstack.
+A Test Kitchen Driver for Apache CloudStack / Citrix CloudPlatform.
 
-## <a name="requirements"></a> Requirements
+## <a name="requirements">Requirements</a>
 
-**TODO:** document any software or library prerequisites that are required to
-use this driver. Implement the `#verify_dependencies` method in your Driver
-class to enforce these requirements in code, if possible.
+This Gem only requires FOG of a version greater than 1.3.1. However, as most of your knife plugins will be using newer
+versions of FOG, that shouldn't be an issue.
 
 ## <a name="installation"></a> Installation and Setup
 
 Please read the [Driver usage][driver_usage] page for more details.
 
-## <a name="config"></a> Configuration
+## <a name="config">Configuration</a>
 
-**TODO:** Write descriptions of all configuration options
+Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
 
-### <a name="config-require-chef-omnibus"></a> require\_chef\_omnibus
+    driver_plugin: cloudstack
+    driver_config:
+      cloudstack_api_key: [YOUR CLOUDSTACK API KEY]
+      cloudstack_secret_key: [YOUR CLOUDSTACK SECRET KEY]
+      cloudstack_api_url: [YOUR CLOUDSTACK API URL]
+      require_chef_omnibus: latest (if you'll be using Chef)
+      template_id: [INSTANCE TEMPLATE ID]
+      serviceoffering_id: [INSTANCE SERVICE OFFERING ID]
+      zone_id: [INSTANCE ZONE ID]
+
+By default, a unique server name will be generated and the randomly generated password will be used, though that
+behavior can be overridden with additional options (e.g., to specify a SSH private key):
+
+    name: [A UNIQUE SERVER NAME]
+    public_key_path: [PATH TO YOUR SSH PUBLIC KEY]
+    username: [SSH USER]
+    port: [SSH PORT]
+
+Only disable SSL cert validation if you absolutely know what you are doing,
+but are stuck with an OpenStack deployment without valid SSL certs.
+
+    disable_ssl_validation: true
+
+### <a name="config-require-chef-omnibus">require\_chef\_omnibus</a>
 
 Determines whether or not a Chef [Omnibus package][chef_omnibus_dl] will be
 installed. There are several different behaviors available:
@@ -32,7 +54,7 @@ installed. There are several different behaviors available:
 
 The default value is unset, or `nil`.
 
-## <a name="development"></a> Development
+## <a name="development">Development</a>
 
 * Source hosted at [GitHub][repo]
 * Report issues/questions/feature requests on [GitHub Issues][issues]
@@ -47,7 +69,7 @@ example:
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create new Pull Request
 
-## <a name="authors"></a> Authors
+## <a name="authors">Authors</a>
 
 Created and maintained by [Jeff Moody][author] (<fifthecho@gmail.com>)
 
@@ -56,9 +78,9 @@ Created and maintained by [Jeff Moody][author] (<fifthecho@gmail.com>)
 Apache 2.0 (see [LICENSE][license])
 
 
-[author]:           https://github.com/enter-github-user
-[issues]:           https://github.com/enter-github-user/kitchen-cloudstack/issues
-[license]:          https://github.com/enter-github-user/kitchen-cloudstack/blob/master/LICENSE
-[repo]:             https://github.com/enter-github-user/kitchen-cloudstack
+[author]:           https://github.com/fifthecho
+[issues]:           https://github.com/fifthecho/kitchen-cloudstack/issues
+[license]:          https://github.com/fifthecho/kitchen-cloudstack/blob/master/LICENSE
+[repo]:             https://github.com/fifthecho/kitchen-cloudstack
 [driver_usage]:     http://docs.kitchen-ci.org/drivers/usage
 [chef_omnibus_dl]:  http://www.opscode.com/chef/install/
