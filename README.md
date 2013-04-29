@@ -1,17 +1,17 @@
-# <a name="title">Kitchen::CloudStack</a>
+# <a name="title"></a> Kitchen::CloudStack
 
 A Test Kitchen Driver for Apache CloudStack / Citrix CloudPlatform.
 
-## <a name="requirements">Requirements</a>
+## <a name="requirements"></a> Requirements
 
 This Gem only requires FOG of a version greater than 1.3.1. However, as most of your knife plugins will be using newer
 versions of FOG, that shouldn't be an issue.
 
-## <a name="installation">Installation and Setup</a>
+## <a name="installation"></a> Installation and Setup
 
 Please read the [Driver usage][driver_usage] page for more details.
 
-## <a name="config">Configuration</a>
+## <a name="config"></a> Configuration
 
 Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
 
@@ -21,11 +21,17 @@ Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
       cloudstack_secret_key: [YOUR CLOUDSTACK SECRET KEY]
       cloudstack_api_url: [YOUR CLOUDSTACK API URL]
       require_chef_omnibus: latest (if you'll be using Chef)
-      template_id: [INSTANCE TEMPLATE ID]
-      serviceoffering_id: [INSTANCE SERVICE OFFERING ID]
-      zone_id: [INSTANCE ZONE ID]
-      network_id: [NETWORK ID FOR ISOLATED OR VPC NETWORKS]
-      security_group_id: [SECURITY GROUP ID FOR SHARED NETWORKS]
+
+Then to specify different OS templates,
+
+    platforms:
+      cloudstack_template_id: [INSTANCE TEMPLATE ID]
+      cloudstack_serviceoffering_id: [INSTANCE SERVICE OFFERING ID]
+      cloudstack_zone_id: [INSTANCE ZONE ID]
+      cloudstack_network_id: [NETWORK ID FOR ISOLATED OR VPC NETWORKS]
+      cloudstack_security_group_id: [SECURITY GROUP ID FOR SHARED NETWORKS]
+    OPTIONAL
+      cloudstack_ssh_keypair_name: [SSH KEY NAME]
 
 By default, a unique server name will be generated and the randomly generated password will be used, though that
 behavior can be overridden with additional options (e.g., to specify a SSH private key):
@@ -36,11 +42,11 @@ behavior can be overridden with additional options (e.g., to specify a SSH priva
     port: [SSH PORT]
 
 Only disable SSL cert validation if you absolutely know what you are doing,
-but are stuck with an OpenStack deployment without valid SSL certs.
+but are stuck with an CloudStack deployment without valid SSL certs.
 
     disable_ssl_validation: true
 
-### <a name="config-require-chef-omnibus">require\_chef\_omnibus</a>
+### <a name="config-require-chef-omnibus"></a> require\_chef\_omnibus
 
 Determines whether or not a Chef [Omnibus package][chef_omnibus_dl] will be
 installed. There are several different behaviors available:
@@ -56,7 +62,7 @@ installed. There are several different behaviors available:
 
 The default value is unset, or `nil`.
 
-## <a name="development">Development</a>
+## <a name="development"></a> Development
 
 * Source hosted at [GitHub][repo]
 * Report issues/questions/feature requests on [GitHub Issues][issues]
@@ -71,7 +77,7 @@ example:
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create new Pull Request
 
-## <a name="authors">Authors</a>
+## <a name="authors"></a> Authors
 
 Created and maintained by [Jeff Moody][author] (<fifthecho@gmail.com>)
 

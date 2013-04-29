@@ -16,8 +16,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'benchmark'
 require 'kitchen'
 require 'fog'
+require 'socket'
+require 'net/ssh/multi'
 
 module Kitchen
 
@@ -36,7 +39,7 @@ module Kitchen
         connection = Fog::Compute.new(
             :provider => :cloudstack,
             :cloudstack_api_key => config[:cloudstack_api_key],
-            :cloudstack_secret_access_key => config[:cloudstack_secret_access_key],
+            :cloudstack_secret_access_key => config[:cloudstack_secret_key],
             :cloudstack_host => cloudstack_uri.host,
             :cloudstack_port => cloudstack_uri.port,
             :cloudstack_path => cloudstack_uri.path,
@@ -46,14 +49,22 @@ module Kitchen
       end
 
       def create_server
-        compute.servers.create(
-            :displayname => config[:name],
-            :cloudstack_zone => config[:cloudstack_zone],
-            :cloudstack_template_id => config[:cloudstack_template_id],
-            :cloudstack_serviceoffering_id => config[:cloudstack_serviceoffering_id],
-            :cloudstack_security_group_id => config[:cloudstack_security_group_id],
-            :cloudstack_network_id => config[:cloudstack_security_group_id]
-        )
+        options = {}
+        options['zoneid'] = config[:cloudstack_zone_id]
+        options['templateid'] = config[:cloudstack_template_id]
+        options['displayname'] = config[:name]
+        options['serviceofferingid'] = config[:cloudstack_serviceoffering_id]
+        if (!config[:cloudstack_security_group_id].nil?)
+          options['securitygroupids'] = config[:cloudstack_security_group_id]
+        end
+        if (!config[:cloudstack_network_id].nil?)
+          options['networkids'] = config[:cloudstack_security_group_id]
+        end
+        if (!config[:cloudstack_ssh_keypair_name].nil?)
+          options['keypair'] = config[:cloudstack_ssh_keypair_name]
+        end
+        debug(options)
+        compute.deploy_virtual_machine(options)
       end
 
       def create(state)
@@ -66,7 +77,55 @@ module Kitchen
           require 'excon'
           Excon.defaults[:ssl_verify_peer] = false
         end
-        puts "Create a server named #{config[name]}!"
+        password = ''
+        if (!config[:cloudstack_ssh_keypair_name].nil?)
+          keypair = config[:cloudstack_ssh_keypair_name]
+        end
+        server = create_server
+        debug(server)
+        state[:server_id] = server['deployvirtualmachineresponse'].fetch('id')
+        jobid = server['deployvirtualmachineresponse'].fetch('jobid')
+        info("CloudStack instance <#{state[:server_id]}> created.")
+        debug("Job ID #{jobid}")
+        server_start = compute.query_async_job_result('jobid'=>jobid)
+        while server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 0
+          print "."
+          sleep(10)
+          server_start = compute.query_async_job_result('jobid'=>jobid)
+          debug("Server_Start: #{server_start} \n")
+        end
+        if server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 2
+          errortext = server_start['queryasyncjobresultresponse'].fetch('jobresult').fetch('errortext')
+          error("ERROR! Job failed with #{errortext}")
+        end
+
+        if server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 1
+          server_info = server_start['queryasyncjobresultresponse']['jobresult']['virtualmachine']
+          debug(server_info)
+          puts "\n(server ready)"
+          if (server_info.fetch('passwordenabled') == true)
+              password = server_info.fetch('password')
+              info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
+              ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
+              state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+              debug(state[:hostname])
+              debug(config[:username])
+              debug(password)
+              tcp_test_ssh(state[:hostname])
+# Installing SSH keys is consistently failing. Not sure why.
+#               if !(config[:public_key_path].nil?)
+#                pub_key = open(config[:public_key_path]).read
+#                # Wait a few moments for the OS to run the cloud-setup-sshkey/password scripts
+#                sleep(30)
+#                ssh.run([
+#                          %{mkdir .ssh},
+#                          %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
+#                      ])
+#              end
+              info("(ssh ready)")
+          end
+
+        end
 
       end
 
@@ -79,6 +138,37 @@ module Kitchen
         state.delete(:server_id)
         state.delete(:hostname)
       end
+
+      def tcp_test_ssh(hostname)
+        print(".")
+        tcp_socket = TCPSocket.new(hostname, 22)
+        readable = IO.select([tcp_socket], nil, nil, 5)
+        if readable
+          debug("\nsshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}\n")
+          yield
+          true
+        else
+          false
+        end
+
+      rescue Errno::ETIMEDOUT
+        sleep 2
+        false
+      rescue Errno::EPERM
+        false
+      rescue Errno::ECONNREFUSED
+        sleep 2
+        false
+      rescue Errno::EHOSTUNREACH
+        sleep 2
+        false
+      rescue Errno::ENETUNREACH
+        sleep 30
+        false
+      ensure
+        tcp_socket && tcp_socket.close
+      end
+
     end
   end
 end
