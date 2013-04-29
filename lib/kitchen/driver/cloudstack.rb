@@ -105,23 +105,23 @@ module Kitchen
           puts "\n(server ready)"
           if (server_info.fetch('passwordenabled') == true)
               password = server_info.fetch('password')
+              state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
               info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
               ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
-              state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
               debug(state[:hostname])
               debug(config[:username])
               debug(password)
               tcp_test_ssh(state[:hostname])
 # Installing SSH keys is consistently failing. Not sure why.
-#               if !(config[:public_key_path].nil?)
-#                pub_key = open(config[:public_key_path]).read
-#                # Wait a few moments for the OS to run the cloud-setup-sshkey/password scripts
-#                sleep(30)
-#                ssh.run([
-#                          %{mkdir .ssh},
-#                          %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
-#                      ])
-#              end
+               if !(config[:public_key_path].nil?)
+                pub_key = open(config[:public_key_path]).read
+                # Wait a few moments for the OS to run the cloud-setup-sshkey/password scripts
+                sleep(30)
+                ssh.run([
+                          %{mkdir .ssh},
+                          %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
+                      ])
+              end
               info("(ssh ready)")
           end
 
