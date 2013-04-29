@@ -89,7 +89,7 @@ module Kitchen
         debug("Job ID #{jobid}")
         server_start = compute.query_async_job_result('jobid'=>jobid)
         while server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 0
-          print "."
+          print ". "
           sleep(10)
           server_start = compute.query_async_job_result('jobid'=>jobid)
           debug("Server_Start: #{server_start} \n")
@@ -102,31 +102,58 @@ module Kitchen
         if server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 1
           server_info = server_start['queryasyncjobresultresponse']['jobresult']['virtualmachine']
           debug(server_info)
-          puts "\n(server ready)"
-          if (server_info.fetch('passwordenabled') == true)
+          print "(server ready)"
+
+          #Check first if the API response has a keypair. I should probably just make this check the config, but this
+            #should save against typos in the config file.
+
+          if (!server_info.fetch('keypair').nil?)
+            state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+            info("SSH for #{state[:hostname]} with SSH Key #{server_info.fetch('keypair')}.")
+            keypair = "./#{server_info.fetch('keypair')}.pem"
+            ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
+            debug(state[:hostname])
+            debug(config[:username])
+            debug(keypair)
+            tcp_test_ssh(state[:hostname])
+            if !(config[:public_key_path].nil?)
+              pub_key = open(config[:public_key_path]).read
+              # Wait a few moments for the OS to run the cloud-setup-sshkey scripts
+              sleep(45)
+              ssh.run([
+                          %{mkdir .ssh},
+                          %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
+                      ])
+            end
+          end
+
+          if (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == true)
               password = server_info.fetch('password')
               state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+              # Print out IP and password so you can record it if you want.
               info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
               ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
               debug(state[:hostname])
               debug(config[:username])
               debug(password)
               tcp_test_ssh(state[:hostname])
-# Installing SSH keys is consistently failing. Not sure why.
                if !(config[:public_key_path].nil?)
                 pub_key = open(config[:public_key_path]).read
-                # Wait a few moments for the OS to run the cloud-setup-sshkey/password scripts
-                sleep(30)
+                # Wait a few moments for the OS to run the cloud-setup-password scripts
+                sleep(45)
                 ssh.run([
                           %{mkdir .ssh},
                           %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
                       ])
+               end
+              if (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == false)
+                state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+                info("No SSH key specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
               end
-              info("(ssh ready)")
           end
 
+          info("(ssh ready)")
         end
-
       end
 
       def destroy(state)
@@ -140,7 +167,8 @@ module Kitchen
       end
 
       def tcp_test_ssh(hostname)
-        print(".")
+        # Ripped unceremoniously from knife-cloudstack-fog as I was having issues with the wait_for_sshd() function.
+        print(". ")
         tcp_socket = TCPSocket.new(hostname, 22)
         readable = IO.select([tcp_socket], nil, nil, 5)
         if readable

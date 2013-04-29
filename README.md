@@ -32,6 +32,8 @@ Then to specify different OS templates,
       cloudstack_security_group_id: [SECURITY GROUP ID FOR SHARED NETWORKS]
     OPTIONAL
       cloudstack_ssh_keypair_name: [SSH KEY NAME]
+To use the CloudStack public key provider, you need to have the .PEM file located in the same directory as
+your .kitchen.yml file.
 
 By default, a unique server name will be generated and the randomly generated password will be used, though that
 behavior can be overridden with additional options (e.g., to specify a SSH private key):
