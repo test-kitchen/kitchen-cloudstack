@@ -21,6 +21,8 @@ Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
       cloudstack_secret_key: [YOUR CLOUDSTACK SECRET KEY]
       cloudstack_api_url: [YOUR CLOUDSTACK API URL]
       require_chef_omnibus: latest (if you'll be using Chef)
+    OPTIONAL
+      cloudstack_sync_time: [NUMBER OF SECONDS TO WAIT FOR CLOUD-SET-GUEST-PASSWORD/SSHKEY]
 
 Then to specify different OS templates,
 

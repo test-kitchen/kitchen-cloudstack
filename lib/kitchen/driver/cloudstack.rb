@@ -110,24 +110,22 @@ module Kitchen
           if (!server_info.fetch('keypair').nil?)
             state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
             info("SSH for #{state[:hostname]} with SSH Key #{server_info.fetch('keypair')}.")
-            keypair = "./#{server_info.fetch('keypair')}.pem"
+            if File.exist?("./#{server_info.fetch('keypair')}.pem")
+              keypair = "./#{server_info.fetch('keypair')}.pem"
+            elsif File.exist?("~/#{server_info.fetch('keypair')}.pem")
+              keypair = "~/#{server_info.fetch('keypair')}.pem"
+            elsif File.exist?("~/.ssh/#{server_info.fetch('keypair')}.pem")
+              keypair = "~/.ssh/#{server_info.fetch('keypair')}.pem"
+            else
+              error("Cannot find PEM file specified.")
+            end
+
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug(state[:hostname])
             debug(config[:username])
             debug(keypair)
-            tcp_test_ssh(state[:hostname])
-            if !(config[:public_key_path].nil?)
-              pub_key = open(config[:public_key_path]).read
-              # Wait a few moments for the OS to run the cloud-setup-sshkey scripts
-              sleep(45)
-              ssh.run([
-                          %{mkdir .ssh},
-                          %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
-                      ])
-            end
-          end
-
-          if (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == true)
+            deploy_private_key(state[:hostname], ssh)
+          elsif (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == true)
               password = server_info.fetch('password')
               state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
               # Print out IP and password so you can record it if you want.
@@ -136,23 +134,11 @@ module Kitchen
               debug(state[:hostname])
               debug(config[:username])
               debug(password)
-              tcp_test_ssh(state[:hostname])
-               if !(config[:public_key_path].nil?)
-                pub_key = open(config[:public_key_path]).read
-                # Wait a few moments for the OS to run the cloud-setup-password scripts
-                sleep(45)
-                ssh.run([
-                          %{mkdir .ssh},
-                          %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
-                      ])
-               end
-              if (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == false)
-                state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
-                info("No SSH key specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
-              end
+              deploy_private_key(state[:hostname], ssh)
+          elsif (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == false)
+            state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+            info("No SSH key specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
-
-          info("(ssh ready)")
         end
       end
 
@@ -195,6 +181,26 @@ module Kitchen
         false
       ensure
         tcp_socket && tcp_socket.close
+      end
+
+      def deploy_private_key(hostname, ssh)
+        debug("Deploying private key to #{hostname} using connection #{ssh}")
+        tcp_test_ssh(hostname)
+        sync_time = 45
+        if (config[:cloudstack_sync_time])
+          debug("Setting sync time to #{config[:cloudstack_sync_time]}")
+          sync_time = config[:cloudstack_sync_time]
+        end
+        if !(config[:public_key_path].nil?)
+          pub_key = open(config[:public_key_path]).read
+          # Wait a few moments for the OS to run the cloud-setup-password scripts
+          sleep(sync_time)
+          ssh.run([
+                      %{mkdir .ssh},
+                      %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
+                  ])
+
+        end
       end
 
     end
