@@ -109,7 +109,7 @@ module Kitchen
 
           if (!server_info.fetch('keypair').nil?)
             state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
-            info("SSH for #{state[:hostname]} with SSH Key #{server_info.fetch('keypair')}.")
+            info("SSH for #{state[:hostname]} with keypair #{server_info.fetch('keypair')}.")
             if File.exist?("./#{server_info.fetch('keypair')}.pem")
               keypair = "./#{server_info.fetch('keypair')}.pem"
             elsif File.exist?("~/#{server_info.fetch('keypair')}.pem")
@@ -137,7 +137,7 @@ module Kitchen
               deploy_private_key(state[:hostname], ssh)
           elsif (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == false)
             state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
-            info("No SSH key specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
+            info("No keypair specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
         end
       end
