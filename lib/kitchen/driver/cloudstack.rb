@@ -123,7 +123,7 @@ module Kitchen
           debug("Keypair is #{keypair}")
           state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
 
-          if (keypair.nil? and keypair != '')
+          if (!keypair.nil? and keypair != '')
             info("SSH for #{state[:hostname]} with keypair #{server_info.fetch('keypair')}.")
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug(state[:hostname])
@@ -140,7 +140,7 @@ module Kitchen
             debug(password)
             deploy_private_key(state[:hostname], ssh)
           else
-            info("No keypair specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
+            info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
         end
       end
