@@ -107,7 +107,9 @@ module Kitchen
 
           keypair = nil
           password = nil
-          if File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
+          if ((!config[:keypair_search_directory].nil?) and (File.exist?("#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem")))
+            keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
+          elsif File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
             keypair = "./#{config[:cloudstack_ssh_keypair_name]}.pem"
           elsif File.exist?("~/#{config[:cloudstack_ssh_keypair_name]}.pem")
             keypair = "~/#{config[:cloudstack_ssh_keypair_name]}.pem"
@@ -121,6 +123,7 @@ module Kitchen
           state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
 
           if (!keypair.nil?)
+            debug("Using keypair: #{keypair}")
             info("SSH for #{state[:hostname]} with keypair #{config[:cloudstack_ssh_keypair_name]}.")
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug(state[:hostname])

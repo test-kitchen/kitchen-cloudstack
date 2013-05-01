@@ -23,6 +23,7 @@ Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
       require_chef_omnibus: latest (if you'll be using Chef)
     OPTIONAL
       cloudstack_sync_time: [NUMBER OF SECONDS TO WAIT FOR CLOUD-SET-GUEST-PASSWORD/SSHKEY]
+      keypair_search_directory: [PATH TO DIRECTORY (other than ~, ., and ~/.ssh) WITH KEYPAIR PEM FILE]
 
 Then to specify different OS templates,
 
@@ -34,9 +35,12 @@ Then to specify different OS templates,
       cloudstack_security_group_id: [SECURITY GROUP ID FOR SHARED NETWORKS]
     OPTIONAL
       cloudstack_ssh_keypair_name: [SSH KEY NAME]
+      cloudstack_sync_time: [NUMBER OF SECONDS TO WAIT FOR CLOUD-SET-GUEST-PASSWORD/SSHKEY]
 To use the CloudStack public key provider, you need to have the .PEM file located in the same directory as
-your .kitchen.yml file, your home directory (~), or your .ssh directory (~/.ssh/) and it must be named the same as the
-Keypair on CloudStack suffixed with .pem.
+your .kitchen.yml file, your home directory (~), your .ssh directory (~/.ssh/), or specify a directory (without any
+trailing slahses) as your "keypair_search_directory" and the file be named the same as the Keypair on CloudStack
+suffixed with .pem (e.g. the Keypair named "TestKey" should be located in one of the searched directories and named
+"TestKey.pem").
 
 By default, a unique server name will be generated and the randomly generated password will be used, though that
 behavior can be overridden with additional options (e.g., to specify a SSH private key):
