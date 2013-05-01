@@ -83,17 +83,20 @@ module Kitchen
         end
         server = create_server
         debug(server)
+
         state[:server_id] = server['deployvirtualmachineresponse'].fetch('id')
         jobid = server['deployvirtualmachineresponse'].fetch('jobid')
         info("CloudStack instance <#{state[:server_id]}> created.")
         debug("Job ID #{jobid}")
+
         server_start = compute.query_async_job_result('jobid'=>jobid)
         while server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 0
           print ". "
           sleep(10)
           server_start = compute.query_async_job_result('jobid'=>jobid)
-          debug("Server_Start: #{server_start} \n")
         end
+        debug("Server_Start: #{server_start} \n")
+
         if server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 2
           errortext = server_start['queryasyncjobresultresponse'].fetch('jobresult').fetch('errortext')
           error("ERROR! Job failed with #{errortext}")
@@ -114,28 +117,29 @@ module Kitchen
             keypair = "~/.ssh/#{server_info.fetch('keypair')}.pem"
           else
             info("Keypair specified but not found. Using password if enabled.")
-            keypair = nil
+            keypair = ''
           end
-          if (keypair.nil?)
-            state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+
+          debug("Keypair is #{keypair}")
+          state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+
+          if (keypair.nil? and keypair != '')
             info("SSH for #{state[:hostname]} with keypair #{server_info.fetch('keypair')}.")
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug(state[:hostname])
             debug(config[:username])
             debug(keypair)
             deploy_private_key(state[:hostname], ssh)
-          elsif (keypair.nil? && server_info.fetch('passwordenabled') == true)
-              password = server_info.fetch('password')
-              state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
-              # Print out IP and password so you can record it if you want.
-              info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
-              ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
-              debug(state[:hostname])
-              debug(config[:username])
-              debug(password)
-              deploy_private_key(state[:hostname], ssh)
-          elsif (keypair.nil? && server_info.fetch('passwordenabled') == false)
-            state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+          elsif (server_info.fetch('passwordenabled') == true)
+            password = server_info.fetch('password')
+            # Print out IP and password so you can record it if you want.
+            info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
+            ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
+            debug(state[:hostname])
+            debug(config[:username])
+            debug(password)
+            deploy_private_key(state[:hostname], ssh)
+          else
             info("No keypair specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
         end
@@ -158,7 +162,6 @@ module Kitchen
         readable = IO.select([tcp_socket], nil, nil, 5)
         if readable
           debug("\nsshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}\n")
-          yield
           true
         else
           false
@@ -187,9 +190,9 @@ module Kitchen
         tcp_test_ssh(hostname)
         sync_time = 45
         if (config[:cloudstack_sync_time])
-          debug("Setting sync time to #{config[:cloudstack_sync_time]}")
           sync_time = config[:cloudstack_sync_time]
         end
+        debug("Sync time is #{sync_time}")
         if !(config[:public_key_path].nil?)
           pub_key = open(config[:public_key_path]).read
           # Wait a few moments for the OS to run the cloud-setup-password scripts
