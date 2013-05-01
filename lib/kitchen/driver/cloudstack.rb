@@ -106,26 +106,25 @@ module Kitchen
 
           #Check first if the API response has a keypair. I should probably just make this check the config, but this
             #should save against typos in the config file.
-
-          if (!server_info.fetch('keypair').nil?)
+          if File.exist?("./#{server_info.fetch('keypair')}.pem")
+            keypair = "./#{server_info.fetch('keypair')}.pem"
+          elsif File.exist?("~/#{server_info.fetch('keypair')}.pem")
+            keypair = "~/#{server_info.fetch('keypair')}.pem"
+          elsif File.exist?("~/.ssh/#{server_info.fetch('keypair')}.pem")
+            keypair = "~/.ssh/#{server_info.fetch('keypair')}.pem"
+          else
+            info("Keypair specified but not found. Using password if enabled.")
+            keypair = nil
+          end
+          if (keypair.nil?)
             state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
             info("SSH for #{state[:hostname]} with keypair #{server_info.fetch('keypair')}.")
-            if File.exist?("./#{server_info.fetch('keypair')}.pem")
-              keypair = "./#{server_info.fetch('keypair')}.pem"
-            elsif File.exist?("~/#{server_info.fetch('keypair')}.pem")
-              keypair = "~/#{server_info.fetch('keypair')}.pem"
-            elsif File.exist?("~/.ssh/#{server_info.fetch('keypair')}.pem")
-              keypair = "~/.ssh/#{server_info.fetch('keypair')}.pem"
-            else
-              error("Cannot find PEM file specified.")
-            end
-
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug(state[:hostname])
             debug(config[:username])
             debug(keypair)
             deploy_private_key(state[:hostname], ssh)
-          elsif (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == true)
+          elsif (keypair.nil? && server_info.fetch('passwordenabled') == true)
               password = server_info.fetch('password')
               state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
               # Print out IP and password so you can record it if you want.
@@ -135,7 +134,7 @@ module Kitchen
               debug(config[:username])
               debug(password)
               deploy_private_key(state[:hostname], ssh)
-          elsif (server_info.fetch('keypair').nil? && server_info.fetch('passwordenabled') == false)
+          elsif (keypair.nil? && server_info.fetch('passwordenabled') == false)
             state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
             info("No keypair specified nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
@@ -202,7 +201,6 @@ module Kitchen
 
         end
       end
-
     end
   end
 end
