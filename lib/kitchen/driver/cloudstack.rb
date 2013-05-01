@@ -77,10 +77,7 @@ module Kitchen
           require 'excon'
           Excon.defaults[:ssl_verify_peer] = false
         end
-        password = ''
-        if (!config[:cloudstack_ssh_keypair_name].nil?)
-          keypair = config[:cloudstack_ssh_keypair_name]
-        end
+
         server = create_server
         debug(server)
 
@@ -107,24 +104,24 @@ module Kitchen
           debug(server_info)
           print "(server ready)"
 
-          #Check first if the API response has a keypair. I should probably just make this check the config, but this
-            #should save against typos in the config file.
-          if File.exist?("./#{server_info.fetch('keypair')}.pem")
-            keypair = "./#{server_info.fetch('keypair')}.pem"
-          elsif File.exist?("~/#{server_info.fetch('keypair')}.pem")
-            keypair = "~/#{server_info.fetch('keypair')}.pem"
-          elsif File.exist?("~/.ssh/#{server_info.fetch('keypair')}.pem")
-            keypair = "~/.ssh/#{server_info.fetch('keypair')}.pem"
-          else
+
+          keypair = nil
+          password = nil
+          if File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
+            keypair = "./#{config[:cloudstack_ssh_keypair_name]}.pem"
+          elsif File.exist?("~/#{config[:cloudstack_ssh_keypair_name]}.pem")
+            keypair = "~/#{config[:cloudstack_ssh_keypair_name]}.pem"
+          elsif File.exist?("~/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem")
+            keypair = "~/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem"
+          elsif (!config[:cloudstack_ssh_keypair_name].nil?)
             info("Keypair specified but not found. Using password if enabled.")
-            keypair = ''
           end
 
-          debug("Keypair is #{keypair}")
+          # debug("Keypair is #{keypair}")
           state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
 
-          if (!keypair.nil? and keypair != '')
-            info("SSH for #{state[:hostname]} with keypair #{server_info.fetch('keypair')}.")
+          if (!keypair.nil?)
+            info("SSH for #{state[:hostname]} with keypair #{config[:cloudstack_ssh_keypair_name]}.")
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug(state[:hostname])
             debug(config[:username])
