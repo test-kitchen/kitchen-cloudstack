@@ -54,15 +54,18 @@ module Kitchen
         options['templateid'] = config[:cloudstack_template_id]
         options['displayname'] = config[:name]
         options['serviceofferingid'] = config[:cloudstack_serviceoffering_id]
+        if (!config[:cloudstack_network_id].nil?)
+          options['networkids'] = config[:cloudstack_network_id]
+        end
+
         if (!config[:cloudstack_security_group_id].nil?)
           options['securitygroupids'] = config[:cloudstack_security_group_id]
         end
-        if (!config[:cloudstack_network_id].nil?)
-          options['networkids'] = config[:cloudstack_security_group_id]
-        end
+
         if (!config[:cloudstack_ssh_keypair_name].nil?)
           options['keypair'] = config[:cloudstack_ssh_keypair_name]
         end
+
         debug(options)
         compute.deploy_virtual_machine(options)
       end
