@@ -124,6 +124,8 @@ module Kitchen
 
           # debug("Keypair is #{keypair}")
           state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+          tcp_test_ssh(state[:hostname])
+          debug("SSH Connectivity Validated.")
 
           if (!keypair.nil?)
             debug("Using keypair: #{keypair}")
