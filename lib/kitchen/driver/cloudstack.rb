@@ -184,6 +184,9 @@ module Kitchen
       rescue Errno::ENETUNREACH
         sleep 30
         false
+      rescue Net::SSH::Disconnect
+        sleep 15
+        false
       ensure
         tcp_socket && tcp_socket.close
       end
