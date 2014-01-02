@@ -21,6 +21,7 @@ require 'kitchen'
 require 'fog'
 require 'socket'
 require 'net/ssh/multi'
+# require 'pry'
 
 module Kitchen
 
@@ -45,14 +46,14 @@ module Kitchen
             :cloudstack_path => cloudstack_uri.path,
             :cloudstack_scheme => cloudstack_uri.scheme
         )
-
       end
 
       def create_server
         options = {}
+        config[:server_name] ||= generate_name(instance.name)
         options['zoneid'] = config[:cloudstack_zone_id]
         options['templateid'] = config[:cloudstack_template_id]
-        options['displayname'] = config[:name]
+        options['displayname'] = config[:server_name]
         options['serviceofferingid'] = config[:cloudstack_serviceoffering_id]
         if (!config[:cloudstack_network_id].nil?)
           options['networkids'] = config[:cloudstack_network_id]
@@ -67,6 +68,7 @@ module Kitchen
         end
 
         debug(options)
+        # binding.pry
         compute.deploy_virtual_machine(options)
       end
 
@@ -212,6 +214,28 @@ module Kitchen
 
         end
       end
+      
+      def generate_name(base)
+        # Generate what should be a unique server name
+        sep = '-'
+        pieces = [
+          base,
+          Etc.getlogin,
+          Socket.gethostname,
+          Array.new(8) { rand(36).to_s(36) }.join
+        ]
+        until pieces.join(sep).length <= 64 do
+          if pieces[2].length > 24
+            pieces[2] = pieces[2][0..-2]
+          elsif pieces[1].length > 16
+            pieces[1] = pieces[1][0..-2]
+          elsif pieces[0].length > 16
+            pieces[0] = pieces[0][0..-2]
+          end
+        end
+        pieces.join sep
+      end
+
     end
   end
 end
