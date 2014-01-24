@@ -96,8 +96,8 @@ Apache 2.0 (see [LICENSE][license])
 
 
 [author]:           https://github.com/fifthecho
-[issues]:           https://github.com/fifthecho/kitchen-cloudstack/issues
-[license]:          https://github.com/fifthecho/kitchen-cloudstack/blob/master/LICENSE
-[repo]:             https://github.com/fifthecho/kitchen-cloudstack
+[issues]:           https://github.com/test-kitchen/kitchen-cloudstack/issues
+[license]:          https://github.com/test-kitchen/kitchen-cloudstack/blob/master/LICENSE
+[repo]:             https://github.com/test-kitchen/kitchen-cloudstack
 [driver_usage]:     http://docs.kitchen-ci.org/drivers/usage
-[chef_omnibus_dl]:  http://www.opscode.com/chef/install/
+[chef_omnibus_dl]:  http://getchef.com/chef/install/

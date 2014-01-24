@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email         = ['fifthecho@gmail.com']
   spec.description   = %q{A Test Kitchen Driver for Cloudstack}
   spec.summary       = spec.description
-  spec.homepage      = 'https://github.com/fifthecho/kitchen-cloudstack'
+  spec.homepage      = 'https://github.com/test-kitchen/kitchen-cloudstack'
   spec.license       = 'Apache 2.0'
 
   spec.files         = `git ls-files`.split($/)
