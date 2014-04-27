@@ -24,6 +24,7 @@ Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
     OPTIONAL
       cloudstack_sync_time: [NUMBER OF SECONDS TO WAIT FOR CLOUD-SET-GUEST-PASSWORD/SSHKEY]
       keypair_search_directory: [PATH TO DIRECTORY (other than ~, ., and ~/.ssh) WITH KEYPAIR PEM FILE]
+      cloudstack_vm_public_ip: [PUBLIC_IP] # In case you use advanced networking and do static NAT manually.
 
 Then to specify different OS templates,
 
