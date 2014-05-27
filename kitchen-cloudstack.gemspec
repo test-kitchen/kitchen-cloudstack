@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.version       = Kitchen::Driver::CLOUDSTACK_VERSION
   spec.authors       = ['Jeff Moody']
   spec.email         = ['fifthecho@gmail.com']
-  spec.description   = %q{A Test Kitchen Driver for Cloudstack}
-  spec.summary       = spec.description
+  spec.description   = %q{A Test Kitchen Driver for Apache CloudStack}
+  spec.summary       = %q{Provides an interface for Test Kitchen to be able to run jobs against an Apache CloudStack cloud.}
   spec.homepage      = 'https://github.com/test-kitchen/kitchen-cloudstack'
   spec.license       = 'Apache 2.0'
 
@@ -18,15 +18,14 @@ Gem::Specification.new do |spec|
   spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'test-kitchen', '>= 1.0.0'
-  spec.add_dependency 'fog', ">=1.15.0"
-  spec.add_dependency 'net-ssh-multi'
+  spec.add_dependency 'test-kitchen', '~> 1.0', '>= 1.0.0'
+  spec.add_dependency 'fog', '~> 1.15', '>= 1.15.0'
 
   spec.add_development_dependency 'bundler', '~> 1.3'
-  spec.add_development_dependency 'rake'
+  spec.add_development_dependency 'rake', '~> 0'
 
-  spec.add_development_dependency 'cane'
-  spec.add_development_dependency 'tailor'
-  spec.add_development_dependency 'countloc'
-  spec.add_development_dependency 'pry'
+  spec.add_development_dependency 'cane', '~> 0'
+  spec.add_development_dependency 'tailor', '~> 0'
+  spec.add_development_dependency 'countloc', '~> 0'
+  spec.add_development_dependency 'pry', '~> 0'
 end

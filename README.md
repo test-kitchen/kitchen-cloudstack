@@ -41,7 +41,8 @@ To use the CloudStack public key provider, you need to have the .PEM file locate
 your .kitchen.yml file, your home directory (~), your .ssh directory (~/.ssh/), or specify a directory (without any
 trailing slahses) as your "keypair_search_directory" and the file be named the same as the Keypair on CloudStack
 suffixed with .pem (e.g. the Keypair named "TestKey" should be located in one of the searched directories and named
-"TestKey.pem").
+"TestKey.pem"). 
+This PEM file should be the PRIVATE key, not the PUBLIC key.
 
 By default, a unique server name will be generated and the randomly generated password will be used, though that
 behavior can be overridden with additional options (e.g., to specify a SSH private key):

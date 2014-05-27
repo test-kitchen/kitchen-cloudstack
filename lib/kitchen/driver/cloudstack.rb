@@ -20,7 +20,7 @@ require 'benchmark'
 require 'kitchen'
 require 'fog'
 require 'socket'
-require 'net/ssh/multi'
+require 'openssl'
 # require 'pry'
 
 module Kitchen
@@ -83,6 +83,7 @@ module Kitchen
           Excon.defaults[:ssl_verify_peer] = false
         end
 
+        
         server = create_server
         debug(server)
 
@@ -116,27 +117,31 @@ module Kitchen
             keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
           elsif File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
             keypair = "./#{config[:cloudstack_ssh_keypair_name]}.pem"
-          elsif File.exist?("~/#{config[:cloudstack_ssh_keypair_name]}.pem")
-            keypair = "~/#{config[:cloudstack_ssh_keypair_name]}.pem"
-          elsif File.exist?("~/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem")
-            keypair = "~/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem"
+          elsif File.exist?("#{ENV["HOME"]}/#{config[:cloudstack_ssh_keypair_name]}.pem")
+            keypair = "#{ENV["HOME"]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
+          elsif File.exist?("#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem")
+            keypair = "#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem"
           elsif (!config[:cloudstack_ssh_keypair_name].nil?)
             info("Keypair specified but not found. Using password if enabled.")
           end
 
           # debug("Keypair is #{keypair}")
           state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
-          tcp_test_ssh(state[:hostname])
+          wait_for_sshd(state[:hostname])
+          
           debug("SSH Connectivity Validated.")
 
           if (!keypair.nil?)
             debug("Using keypair: #{keypair}")
             info("SSH for #{state[:hostname]} with keypair #{config[:cloudstack_ssh_keypair_name]}.")
+            ssh_key = File.read(keypair)
+            if ssh_key.split[0] == "ssh-rsa" or ssh_key.split[0] == "ssh-dsa"
+              error("SSH key #{keypair} is not a Private Key. Please modify your .kitchen.yml")
+            end
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug(state[:hostname])
             debug(config[:username])
             debug(keypair)
-            deploy_private_key(state[:hostname], ssh)
           elsif (server_info.fetch('passwordenabled') == true)
             password = server_info.fetch('password')
             # Print out IP and password so you can record it if you want.
@@ -145,10 +150,14 @@ module Kitchen
             debug(state[:hostname])
             debug(config[:username])
             debug(password)
-            deploy_private_key(state[:hostname], ssh)
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
+          # binding.pry
+
+          validate_ssh_connectivity(ssh)
+
+          deploy_private_key(ssh)
         end
       end
 
@@ -162,56 +171,52 @@ module Kitchen
         state.delete(:hostname)
       end
 
-      def tcp_test_ssh(hostname)
-        # Ripped unceremoniously from knife-cloudstack-fog as I was having issues with the wait_for_sshd() function.
-        print(". ")
-        tcp_socket = TCPSocket.new(hostname, 22)
-        readable = IO.select([tcp_socket], nil, nil, 5)
-        if readable
-          debug("\nsshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}\n")
-          true
-        else
+      def validate_ssh_connectivity(ssh)
+        rescue Errno::ETIMEDOUT
+          sleep 2
           false
-        end
-
-      rescue Errno::ETIMEDOUT
-        sleep 2
-        false
-      rescue Errno::EPERM
-        false
-      rescue Errno::ECONNREFUSED
-        sleep 2
-        false
-      rescue Errno::EHOSTUNREACH
-        sleep 2
-        false
-      rescue Errno::ENETUNREACH
-        sleep 30
-        false
-      rescue Net::SSH::Disconnect
-        sleep 15
-        false
-      ensure
-        tcp_socket && tcp_socket.close
+        rescue Errno::EPERM
+          false
+        rescue Errno::ECONNREFUSED
+          sleep 2
+          false
+        rescue Errno::EHOSTUNREACH
+          sleep 2
+          false
+        rescue Errno::ENETUNREACH
+          sleep 30
+          false
+        rescue Net::SSH::Disconnect
+          sleep 15
+          false
+        rescue Net::SSH::AuthenticationFailed
+          sleep 15
+          failse
+        ensure
+          sync_time = 45
+          if (config[:cloudstack_sync_time])
+            sync_time = config[:cloudstack_sync_time]
+          end
+          sleep(sync_time)
+          debug("Connecting to host and running ls")
+          ssh.run('ls')
       end
 
-      def deploy_private_key(hostname, ssh)
-        debug("Deploying private key to #{hostname} using connection #{ssh}")
-        tcp_test_ssh(hostname)
-        sync_time = 45
-        if (config[:cloudstack_sync_time])
-          sync_time = config[:cloudstack_sync_time]
+      def deploy_private_key(ssh)
+        debug("Deploying user private key to server using connection #{ssh} to guarantee connectivity.")
+        if File.exist?("#{ENV["HOME"]}/.ssh/id_rsa.pub")
+          user_public_key = File.read("#{ENV["HOME"]}/.ssh/id_rsa.pub")
+        elsif File.exist?("#{ENV["HOME"]}/.ssh/id_dsa.pub")
+          user_public_key = File.read("#{ENV["HOME"]}/.ssh/id_dsa.pub")
+        else
+          debug("No public SSH key for user. Skipping.")
         end
-        debug("Sync time is #{sync_time}")
-        if !(config[:public_key_path].nil?)
-          pub_key = open(config[:public_key_path]).read
-          # Wait a few moments for the OS to run the cloud-setup-password scripts
-          sleep(sync_time)
+
+        if user_public_key
           ssh.run([
                       %{mkdir .ssh},
-                      %{echo "#{pub_key}" >> ~/.ssh/authorized_keys}
+                      %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys}
                   ])
-
         end
       end
       
