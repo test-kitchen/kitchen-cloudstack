@@ -125,7 +125,7 @@ module Kitchen
           end
 
           # debug("Keypair is #{keypair}")
-          state[:hostname] = server_info.fetch('nic').first.fetch('ipaddress')
+          state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
           tcp_test_ssh(state[:hostname])
           debug("SSH Connectivity Validated.")
 
