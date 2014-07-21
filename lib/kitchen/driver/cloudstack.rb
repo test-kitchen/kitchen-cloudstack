@@ -188,7 +188,7 @@ module Kitchen
           false
         rescue Net::SSH::AuthenticationFailed
           sleep 15
-          failse
+          false
         ensure
           sync_time = 45
           if (config[:cloudstack_sync_time])
