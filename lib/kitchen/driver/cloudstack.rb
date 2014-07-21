@@ -21,7 +21,7 @@ require 'kitchen'
 require 'fog'
 require 'socket'
 require 'openssl'
-# require 'pry'
+require 'pry'
 
 module Kitchen
 
@@ -66,7 +66,8 @@ module Kitchen
 
         debug(options)
         # binding.pry
-        compute.deploy_virtual_machine(config[:cloudstack_serviceoffering_id], config[:cloudstack_template_id], config[:cloudstack_zone_id], options)
+        compute.deploy_virtual_machine(config[:cloudstack_serviceoffering_id], 
+          config[:cloudstack_template_id], config[:cloudstack_zone_id], options)
       end
 
       def create(state)
@@ -112,16 +113,21 @@ module Kitchen
           password = nil
           if ((!config[:keypair_search_directory].nil?) and (File.exist?("#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem")))
             keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
+            debug("Keypair being used is #{keypair}")
           elsif File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
             keypair = "./#{config[:cloudstack_ssh_keypair_name]}.pem"
+            debug("Keypair being used is #{keypair}")
           elsif File.exist?("#{ENV["HOME"]}/#{config[:cloudstack_ssh_keypair_name]}.pem")
             keypair = "#{ENV["HOME"]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
+            debug("Keypair being used is #{keypair}")
           elsif File.exist?("#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem")
             keypair = "#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem"
+            debug("Keypair being used is #{keypair}")
           elsif (!config[:cloudstack_ssh_keypair_name].nil?)
             info("Keypair specified but not found. Using password if enabled.")
           end
 
+          # binding.pry
           # debug("Keypair is #{keypair}")
           state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
           wait_for_sshd(state[:hostname])
