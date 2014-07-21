@@ -19,7 +19,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'test-kitchen', '~> 1.0', '>= 1.0.0'
-  spec.add_dependency 'fog', '~> 1.15', '>= 1.15.0'
+  spec.add_dependency 'fog', '~> 1.23', '>= 1.23.0'
 
   spec.add_development_dependency 'bundler', '~> 1.3'
   spec.add_development_dependency 'rake', '~> 0'

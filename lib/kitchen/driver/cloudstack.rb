@@ -51,10 +51,7 @@ module Kitchen
       def create_server
         options = {}
         config[:server_name] ||= generate_name(instance.name)
-        options['zoneid'] = config[:cloudstack_zone_id]
-        options['templateid'] = config[:cloudstack_template_id]
         options['displayname'] = config[:server_name]
-        options['serviceofferingid'] = config[:cloudstack_serviceoffering_id]
         if (!config[:cloudstack_network_id].nil?)
           options['networkids'] = config[:cloudstack_network_id]
         end
@@ -69,7 +66,7 @@ module Kitchen
 
         debug(options)
         # binding.pry
-        compute.deploy_virtual_machine(options)
+        compute.deploy_virtual_machine(config[:cloudstack_serviceoffering_id], config[:cloudstack_template_id], config[:cloudstack_zone_id], options)
       end
 
       def create(state)
@@ -92,11 +89,11 @@ module Kitchen
         info("CloudStack instance <#{state[:server_id]}> created.")
         debug("Job ID #{jobid}")
 
-        server_start = compute.query_async_job_result('jobid'=>jobid)
+        server_start = compute.query_async_job_result(jobid)
         while server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 0
           print ". "
           sleep(10)
-          server_start = compute.query_async_job_result('jobid'=>jobid)
+          server_start = compute.query_async_job_result(jobid)
         end
         debug("Server_Start: #{server_start} \n")
 
@@ -165,7 +162,7 @@ module Kitchen
         return if state[:server_id].nil?
 
         server = compute.servers.get(state[:server_id])
-        server.destroy unless server.nil?
+        compute.destroy_virtual_machine(state[:server_id]) unless server.nil?
         info("CloudStack instance <#{state[:server_id]}> destroyed.")
         state.delete(:server_id)
         state.delete(:hostname)
