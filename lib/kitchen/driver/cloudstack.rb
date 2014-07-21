@@ -142,17 +142,13 @@ module Kitchen
               error("SSH key #{keypair} is not a Private Key. Please modify your .kitchen.yml")
             end
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
-            debug(state[:hostname])
-            debug(config[:username])
-            debug(keypair)
+            debug("Connecting to : #{state[:hostname]} as #{config[:username]} using keypair #{keypair}.")
           elsif (server_info.fetch('passwordenabled') == true)
             password = server_info.fetch('password')
             # Print out IP and password so you can record it if you want.
             info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
-            debug(state[:hostname])
-            debug(config[:username])
-            debug(password)
+            debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
@@ -176,23 +172,30 @@ module Kitchen
 
       def validate_ssh_connectivity(ssh)
         rescue Errno::ETIMEDOUT
+          debug("SSH connection timed out. Retrying.")
           sleep 2
           false
         rescue Errno::EPERM
+          debug("SSH connection returned error. Retrying.")
           false
         rescue Errno::ECONNREFUSED
+          debug("SSH connection returned connection refused. Retrying.")
           sleep 2
           false
         rescue Errno::EHOSTUNREACH
+          debug("SSH connection returned host unreachable. Retrying.")
           sleep 2
           false
         rescue Errno::ENETUNREACH
+          debug("SSH connection returned network unreachable. Retrying.")
           sleep 30
           false
         rescue Net::SSH::Disconnect
+          debug("SSH connection has been disconnected. Retrying.")
           sleep 15
           false
         rescue Net::SSH::AuthenticationFailed
+          debug("SSH authentication has failed. Password or Keys may not be in place yet. Retrying.")
           sleep 15
           false
         ensure
