@@ -64,10 +64,13 @@ module Kitchen
           options['keypair'] = config[:cloudstack_ssh_keypair_name]
         end
 
+        options[:templateid] = config[:cloudstack_template_id]
+        options[:serviceofferingid] = config[:cloudstack_serviceoffering_id]
+        options[:zoneid] = config[:cloudstack_zone_id]
+
         debug(options)
         # binding.pry
-        compute.deploy_virtual_machine(config[:cloudstack_serviceoffering_id], 
-          config[:cloudstack_template_id], config[:cloudstack_zone_id], options)
+        compute.deploy_virtual_machine(options)
       end
 
       def create(state)
