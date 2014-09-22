@@ -21,7 +21,7 @@ require 'kitchen'
 require 'fog'
 require 'socket'
 require 'openssl'
-require 'pry'
+# require 'pry'
 
 module Kitchen
 
@@ -89,24 +89,35 @@ module Kitchen
         debug(server)
 
         state[:server_id] = server['deployvirtualmachineresponse'].fetch('id')
-        jobid = server['deployvirtualmachineresponse'].fetch('jobid')
+        start_jobid = {'jobid' => server['deployvirtualmachineresponse'].fetch('jobid')}
         info("CloudStack instance <#{state[:server_id]}> created.")
-        debug("Job ID #{jobid}")
+        debug("Job ID #{start_jobid}")
+        # Cloning the original job id hash because running the query_async_job_result updates the hash to include
+        # more than just the job id (which I could work around, but I'm lazy).
+        jobid = start_jobid.clone
 
         server_start = compute.query_async_job_result(jobid)
-        while server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 0
+        # jobstatus of zero is a running job
+        while server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+          debug("Job status: #{server_start}")
           print ". "
           sleep(10)
+          debug("Running Job ID #{jobid}")
+          debug("Start Job ID #{start_jobid}")
+          # We have to reclone on each iteration, as the hash keeps getting updated.
+          jobid = start_jobid.clone
           server_start = compute.query_async_job_result(jobid)
         end
         debug("Server_Start: #{server_start} \n")
 
-        if server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 2
+        # jobstatus of 2 is an error response
+        if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 2
           errortext = server_start['queryasyncjobresultresponse'].fetch('jobresult').fetch('errortext')
           error("ERROR! Job failed with #{errortext}")
         end
 
-        if server_start['queryasyncjobresultresponse'].fetch('jobstatus') == 1
+        # jobstatus of 1 is a succesfully completed async job
+        if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
           server_info = server_start['queryasyncjobresultresponse']['jobresult']['virtualmachine']
           debug(server_info)
           print "(server ready)"
@@ -165,9 +176,11 @@ module Kitchen
 
       def destroy(state)
         return if state[:server_id].nil?
-
-        server = compute.servers.get(state[:server_id])
-        compute.destroy_virtual_machine(state[:server_id]) unless server.nil?
+        debug("Destroying #{state[:server_id]}")
+        server = compute.servers.get({'id' => state[:server_id]})
+        if not server.nil?
+          compute.destroy_virtual_machine({'id' => state[:server_id]})
+        end
         info("CloudStack instance <#{state[:server_id]}> destroyed.")
         state.delete(:server_id)
         state.delete(:hostname)
