@@ -164,7 +164,7 @@ module Kitchen
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
           elsif (!config[:password].nil?)
-            info("Connecting with user #{config[:username]} with password #{password}")
+            info("Connecting with user #{config[:username]} with password #{config[:password]}")
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => config[:password]})
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
