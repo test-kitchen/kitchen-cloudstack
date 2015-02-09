@@ -34,7 +34,8 @@ module Kitchen
       default_config :name,             nil
       default_config :username,         'root'
       default_config :port,             '22'
-
+      default_config :password,         nil
+      
       def compute
         cloudstack_uri =  URI.parse(config[:cloudstack_api_url])
         connection = Fog::Compute.new(
@@ -124,7 +125,6 @@ module Kitchen
 
 
           keypair = nil
-          password = nil
           if ((!config[:keypair_search_directory].nil?) and (File.exist?("#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem")))
             keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
             debug("Keypair being used is #{keypair}")
@@ -163,6 +163,9 @@ module Kitchen
             info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
+          elsif (!config[:password].nil?)
+            info("Connecting with user #{config[:username]} with password #{config[:password]}")
+            ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => config[:password]})
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
