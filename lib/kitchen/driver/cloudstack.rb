@@ -180,7 +180,7 @@ module Kitchen
       def destroy(state)
         return if state[:server_id].nil?
         debug("Destroying #{state[:server_id]}")
-        server = compute.servers.get({'id' => state[:server_id]})
+        server = compute.servers.get(state[:server_id])
         if not server.nil?
           compute.destroy_virtual_machine({'id' => state[:server_id]})
         end
