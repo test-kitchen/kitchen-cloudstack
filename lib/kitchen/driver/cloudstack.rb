@@ -115,6 +115,7 @@ module Kitchen
         if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 2
           errortext = server_start['queryasyncjobresultresponse'].fetch('jobresult').fetch('errortext')
           error("ERROR! Job failed with #{errortext}")
+          raise ActionFailed, "Could not create server #{errortext}"
         end
 
         # jobstatus of 1 is a succesfully completed async job
