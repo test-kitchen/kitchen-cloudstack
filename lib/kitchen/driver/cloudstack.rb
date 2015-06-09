@@ -228,7 +228,7 @@ module Kitchen
           sleep 15
           false
         ensure
-          sync_time = 45
+          sync_time = 0
           if (config[:cloudstack_sync_time])
             sync_time = config[:cloudstack_sync_time]
           end
