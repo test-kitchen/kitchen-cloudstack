@@ -145,9 +145,6 @@ module Kitchen
           # binding.pry
           # debug("Keypair is #{keypair}")
           state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
-          wait_for_sshd(state[:hostname])
-          
-          debug("SSH Connectivity Validated.")
 
           if (!keypair.nil?)
             debug("Using keypair: #{keypair}")
@@ -156,16 +153,28 @@ module Kitchen
             if ssh_key.split[0] == "ssh-rsa" or ssh_key.split[0] == "ssh-dsa"
               error("SSH key #{keypair} is not a Private Key. Please modify your .kitchen.yml")
             end
+
+            wait_for_sshd(state[:hostname], config[:username], {:keys => keypair})
+            debug("SSH connectivity validated with keypair.")
+
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using keypair #{keypair}.")
           elsif (server_info.fetch('passwordenabled') == true)
             password = server_info.fetch('password')
             # Print out IP and password so you can record it if you want.
             info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
+
+            wait_for_sshd(state[:hostname], config[:username], {:password => password})
+            debug("SSH connectivity validated with cloudstack-set password.")
+
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
           elsif (!config[:password].nil?)
             info("Connecting with user #{config[:username]} with password #{config[:password]}")
+
+            wait_for_sshd(state[:hostname], config[:username], {:password => config[:password]})
+            debug("SSH connectivity validated with fixed password.")
+
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => config[:password]})
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
