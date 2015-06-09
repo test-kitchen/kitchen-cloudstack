@@ -161,6 +161,7 @@ module Kitchen
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using keypair #{keypair}.")
           elsif (server_info.fetch('passwordenabled') == true)
             password = server_info.fetch('password')
+            config[:password] = password
             # Print out IP and password so you can record it if you want.
             info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
 
