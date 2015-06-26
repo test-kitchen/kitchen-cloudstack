@@ -35,17 +35,17 @@ module Kitchen
       default_config :username,         'root'
       default_config :port,             '22'
       default_config :password,         nil
-      
+
       def compute
         cloudstack_uri =  URI.parse(config[:cloudstack_api_url])
         connection = Fog::Compute.new(
-            :provider => :cloudstack,
-            :cloudstack_api_key => config[:cloudstack_api_key],
-            :cloudstack_secret_access_key => config[:cloudstack_secret_key],
-            :cloudstack_host => cloudstack_uri.host,
-            :cloudstack_port => cloudstack_uri.port,
-            :cloudstack_path => cloudstack_uri.path,
-            :cloudstack_scheme => cloudstack_uri.scheme
+          :provider => :cloudstack,
+          :cloudstack_api_key => config[:cloudstack_api_key],
+          :cloudstack_secret_access_key => config[:cloudstack_secret_key],
+          :cloudstack_host => cloudstack_uri.host,
+          :cloudstack_port => cloudstack_uri.port,
+          :cloudstack_path => cloudstack_uri.path,
+          :cloudstack_scheme => cloudstack_uri.scheme
         )
       end
 
@@ -65,6 +65,10 @@ module Kitchen
           options['keypair'] = config[:cloudstack_ssh_keypair_name]
         end
 
+        if config[:cloudstack_diskoffering_id]
+          options['diskofferingid'] = config[:cloudstack_diskoffering_id]
+        end
+
         options[:templateid] = config[:cloudstack_template_id]
         options[:serviceofferingid] = config[:cloudstack_serviceoffering_id]
         options[:zoneid] = config[:cloudstack_zone_id]
@@ -78,14 +82,14 @@ module Kitchen
         if not config[:name]
           # Generate what should be a unique server name
           config[:name] = "#{instance.name}-#{Etc.getlogin}-" +
-              "#{Socket.gethostname}-#{Array.new(8){rand(36).to_s(36)}.join}"
+            "#{Socket.gethostname}-#{Array.new(8){rand(36).to_s(36)}.join}"
         end
         if config[:disable_ssl_validation]
           require 'excon'
           Excon.defaults[:ssl_verify_peer] = false
         end
 
-        
+
         server = create_server
         debug(server)
 
@@ -201,41 +205,41 @@ module Kitchen
       end
 
       def validate_ssh_connectivity(ssh)
-        rescue Errno::ETIMEDOUT
-          debug("SSH connection timed out. Retrying.")
-          sleep 2
-          false
-        rescue Errno::EPERM
-          debug("SSH connection returned error. Retrying.")
-          false
-        rescue Errno::ECONNREFUSED
-          debug("SSH connection returned connection refused. Retrying.")
-          sleep 2
-          false
-        rescue Errno::EHOSTUNREACH
-          debug("SSH connection returned host unreachable. Retrying.")
-          sleep 2
-          false
-        rescue Errno::ENETUNREACH
-          debug("SSH connection returned network unreachable. Retrying.")
-          sleep 30
-          false
-        rescue Net::SSH::Disconnect
-          debug("SSH connection has been disconnected. Retrying.")
-          sleep 15
-          false
-        rescue Net::SSH::AuthenticationFailed
-          debug("SSH authentication has failed. Password or Keys may not be in place yet. Retrying.")
-          sleep 15
-          false
-        ensure
-          sync_time = 0
-          if (config[:cloudstack_sync_time])
-            sync_time = config[:cloudstack_sync_time]
-          end
-          sleep(sync_time)
-          debug("Connecting to host and running ls")
-          ssh.run('ls')
+      rescue Errno::ETIMEDOUT
+        debug("SSH connection timed out. Retrying.")
+        sleep 2
+        false
+      rescue Errno::EPERM
+        debug("SSH connection returned error. Retrying.")
+        false
+      rescue Errno::ECONNREFUSED
+        debug("SSH connection returned connection refused. Retrying.")
+        sleep 2
+        false
+      rescue Errno::EHOSTUNREACH
+        debug("SSH connection returned host unreachable. Retrying.")
+        sleep 2
+        false
+      rescue Errno::ENETUNREACH
+        debug("SSH connection returned network unreachable. Retrying.")
+        sleep 30
+        false
+      rescue Net::SSH::Disconnect
+        debug("SSH connection has been disconnected. Retrying.")
+        sleep 15
+        false
+      rescue Net::SSH::AuthenticationFailed
+        debug("SSH authentication has failed. Password or Keys may not be in place yet. Retrying.")
+        sleep 15
+        false
+      ensure
+        sync_time = 0
+        if (config[:cloudstack_sync_time])
+          sync_time = config[:cloudstack_sync_time]
+        end
+        sleep(sync_time)
+        debug("Connecting to host and running ls")
+        ssh.run('ls')
       end
 
       def deploy_private_key(ssh)
@@ -250,12 +254,12 @@ module Kitchen
 
         if user_public_key
           ssh.run([
-                      %{mkdir .ssh},
-                      %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys}
-                  ])
+            %{mkdir .ssh},
+            %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys}
+          ])
         end
       end
-      
+
       def generate_name(base)
         # Generate what should be a unique server name
         sep = '-'
