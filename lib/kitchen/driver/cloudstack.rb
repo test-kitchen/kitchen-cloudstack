@@ -21,12 +21,9 @@ require 'kitchen'
 require 'fog'
 require 'socket'
 require 'openssl'
-# require 'pry'
 
 module Kitchen
-
   module Driver
-
     # Cloudstack driver for Kitchen.
     #
     # @author Jeff Moody <fifthecho@gmail.com>
@@ -53,15 +50,15 @@ module Kitchen
         options = {}
         config[:server_name] ||= generate_name(instance.name)
         options['displayname'] = config[:server_name]
-        if (!config[:cloudstack_network_id].nil?)
+        if config[:cloudstack_network_id]
           options['networkids'] = config[:cloudstack_network_id]
         end
 
-        if (!config[:cloudstack_security_group_id].nil?)
+        if config[:cloudstack_security_group_id]
           options['securitygroupids'] = config[:cloudstack_security_group_id]
         end
 
-        if (!config[:cloudstack_ssh_keypair_name].nil?)
+        if config[:cloudstack_ssh_keypair_name]
           options['keypair'] = config[:cloudstack_ssh_keypair_name]
         end
 
@@ -74,7 +71,6 @@ module Kitchen
         options[:zoneid] = config[:cloudstack_zone_id]
 
         debug(options)
-        # binding.pry
         compute.deploy_virtual_machine(options)
       end
 
@@ -88,7 +84,6 @@ module Kitchen
           require 'excon'
           Excon.defaults[:ssl_verify_peer] = false
         end
-
 
         server = create_server
         debug(server)
@@ -128,7 +123,6 @@ module Kitchen
           debug(server_info)
           print "(server ready)"
 
-
           keypair = nil
           if ((!config[:keypair_search_directory].nil?) and (File.exist?("#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem")))
             keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
@@ -146,8 +140,6 @@ module Kitchen
             info("Keypair specified but not found. Using password if enabled.")
           end
 
-          # binding.pry
-          # debug("Keypair is #{keypair}")
           state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
 
           if (!keypair.nil?)
@@ -184,7 +176,6 @@ module Kitchen
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
-          # binding.pry
 
           validate_ssh_connectivity(ssh)
 
@@ -193,10 +184,10 @@ module Kitchen
       end
 
       def destroy(state)
-        return if state[:server_id].nil?
+        return unless state[:server_id]
         debug("Destroying #{state[:server_id]}")
         server = compute.servers.get(state[:server_id])
-        if not server.nil?
+        if server
           compute.destroy_virtual_machine({'id' => state[:server_id]})
         end
         info("CloudStack instance <#{state[:server_id]}> destroyed.")
@@ -280,7 +271,6 @@ module Kitchen
         end
         pieces.join sep
       end
-
     end
   end
 end
