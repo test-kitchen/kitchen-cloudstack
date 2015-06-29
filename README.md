@@ -32,9 +32,10 @@ Then to specify different OS templates,
       cloudstack_template_id: [INSTANCE TEMPLATE ID]
       cloudstack_serviceoffering_id: [INSTANCE SERVICE OFFERING ID]
       cloudstack_zone_id: [INSTANCE ZONE ID]
+    OPTIONAL
       cloudstack_network_id: [NETWORK ID FOR ISOLATED OR VPC NETWORKS]
       cloudstack_security_group_id: [SECURITY GROUP ID FOR SHARED NETWORKS]
-    OPTIONAL
+      cloudstack_diskoffering_id: [INSTANCE DISK OFFERING ID]
       cloudstack_ssh_keypair_name: [SSH KEY NAME]
       cloudstack_sync_time: [NUMBER OF SECONDS TO WAIT FOR CLOUD-SET-GUEST-PASSWORD/SSHKEY]
 To use the CloudStack public key provider, you need to have the .PEM file located in the same directory as

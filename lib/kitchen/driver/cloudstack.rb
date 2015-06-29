@@ -21,12 +21,9 @@ require 'kitchen'
 require 'fog'
 require 'socket'
 require 'openssl'
-# require 'pry'
 
 module Kitchen
-
   module Driver
-
     # Cloudstack driver for Kitchen.
     #
     # @author Jeff Moody <fifthecho@gmail.com>
@@ -35,34 +32,40 @@ module Kitchen
       default_config :username,         'root'
       default_config :port,             '22'
       default_config :password,         nil
-      
+
       def compute
         cloudstack_uri =  URI.parse(config[:cloudstack_api_url])
         connection = Fog::Compute.new(
-            :provider => :cloudstack,
-            :cloudstack_api_key => config[:cloudstack_api_key],
-            :cloudstack_secret_access_key => config[:cloudstack_secret_key],
-            :cloudstack_host => cloudstack_uri.host,
-            :cloudstack_port => cloudstack_uri.port,
-            :cloudstack_path => cloudstack_uri.path,
-            :cloudstack_scheme => cloudstack_uri.scheme
+          :provider => :cloudstack,
+          :cloudstack_api_key => config[:cloudstack_api_key],
+          :cloudstack_secret_access_key => config[:cloudstack_secret_key],
+          :cloudstack_host => cloudstack_uri.host,
+          :cloudstack_port => cloudstack_uri.port,
+          :cloudstack_path => cloudstack_uri.path,
+          :cloudstack_scheme => cloudstack_uri.scheme
         )
       end
 
       def create_server
         options = {}
+
         config[:server_name] ||= generate_name(instance.name)
         options['displayname'] = config[:server_name]
-        if (!config[:cloudstack_network_id].nil?)
+
+        if config[:cloudstack_network_id]
           options['networkids'] = config[:cloudstack_network_id]
         end
 
-        if (!config[:cloudstack_security_group_id].nil?)
+        if config[:cloudstack_security_group_id]
           options['securitygroupids'] = config[:cloudstack_security_group_id]
         end
 
-        if (!config[:cloudstack_ssh_keypair_name].nil?)
+        if config[:cloudstack_ssh_keypair_name]
           options['keypair'] = config[:cloudstack_ssh_keypair_name]
+        end
+
+        if config[:cloudstack_diskoffering_id]
+          options['diskofferingid'] = config[:cloudstack_diskoffering_id]
         end
 
         options[:templateid] = config[:cloudstack_template_id]
@@ -70,7 +73,6 @@ module Kitchen
         options[:zoneid] = config[:cloudstack_zone_id]
 
         debug(options)
-        # binding.pry
         compute.deploy_virtual_machine(options)
       end
 
@@ -78,22 +80,24 @@ module Kitchen
         if not config[:name]
           # Generate what should be a unique server name
           config[:name] = "#{instance.name}-#{Etc.getlogin}-" +
-              "#{Socket.gethostname}-#{Array.new(8){rand(36).to_s(36)}.join}"
+            "#{Socket.gethostname}-#{Array.new(8){rand(36).to_s(36)}.join}"
         end
         if config[:disable_ssl_validation]
           require 'excon'
           Excon.defaults[:ssl_verify_peer] = false
         end
 
-        
         server = create_server
         debug(server)
 
         state[:server_id] = server['deployvirtualmachineresponse'].fetch('id')
-        start_jobid = {'jobid' => server['deployvirtualmachineresponse'].fetch('jobid')}
+        start_jobid = {
+          'jobid' => server['deployvirtualmachineresponse'].fetch('jobid')
+        }
         info("CloudStack instance <#{state[:server_id]}> created.")
         debug("Job ID #{start_jobid}")
-        # Cloning the original job id hash because running the query_async_job_result updates the hash to include
+        # Cloning the original job id hash because running the
+        # query_async_job_result updates the hash to include
         # more than just the job id (which I could work around, but I'm lazy).
         jobid = start_jobid.clone
 
@@ -113,8 +117,12 @@ module Kitchen
 
         # jobstatus of 2 is an error response
         if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 2
-          errortext = server_start['queryasyncjobresultresponse'].fetch('jobresult').fetch('errortext')
+          errortext = server_start['queryasyncjobresultresponse']
+            .fetch('jobresult')
+            .fetch('errortext')
+
           error("ERROR! Job failed with #{errortext}")
+
           raise ActionFailed, "Could not create server #{errortext}"
         end
 
@@ -124,9 +132,10 @@ module Kitchen
           debug(server_info)
           print "(server ready)"
 
-
           keypair = nil
-          if ((!config[:keypair_search_directory].nil?) and (File.exist?("#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem")))
+          if config[:keypair_search_directory] and File.exist?(
+            "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
+          )
             keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
             debug("Keypair being used is #{keypair}")
           elsif File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
@@ -142,11 +151,9 @@ module Kitchen
             info("Keypair specified but not found. Using password if enabled.")
           end
 
-          # binding.pry
-          # debug("Keypair is #{keypair}")
           state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
 
-          if (!keypair.nil?)
+          if keypair
             debug("Using keypair: #{keypair}")
             info("SSH for #{state[:hostname]} with keypair #{config[:cloudstack_ssh_keypair_name]}.")
             ssh_key = File.read(keypair)
@@ -159,7 +166,7 @@ module Kitchen
 
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using keypair #{keypair}.")
-          elsif (server_info.fetch('passwordenabled') == true)
+          elsif server_info.fetch('passwordenabled')
             password = server_info.fetch('password')
             config[:password] = password
             # Print out IP and password so you can record it if you want.
@@ -170,7 +177,7 @@ module Kitchen
 
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
-          elsif (!config[:password].nil?)
+          elsif config[:password]
             info("Connecting with user #{config[:username]} with password #{config[:password]}")
 
             wait_for_sshd(state[:hostname], config[:username], {:password => config[:password]})
@@ -180,7 +187,6 @@ module Kitchen
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
-          # binding.pry
 
           validate_ssh_connectivity(ssh)
 
@@ -189,10 +195,10 @@ module Kitchen
       end
 
       def destroy(state)
-        return if state[:server_id].nil?
+        return unless state[:server_id]
         debug("Destroying #{state[:server_id]}")
         server = compute.servers.get(state[:server_id])
-        if not server.nil?
+        if server
           compute.destroy_virtual_machine({'id' => state[:server_id]})
         end
         info("CloudStack instance <#{state[:server_id]}> destroyed.")
@@ -201,41 +207,41 @@ module Kitchen
       end
 
       def validate_ssh_connectivity(ssh)
-        rescue Errno::ETIMEDOUT
-          debug("SSH connection timed out. Retrying.")
-          sleep 2
-          false
-        rescue Errno::EPERM
-          debug("SSH connection returned error. Retrying.")
-          false
-        rescue Errno::ECONNREFUSED
-          debug("SSH connection returned connection refused. Retrying.")
-          sleep 2
-          false
-        rescue Errno::EHOSTUNREACH
-          debug("SSH connection returned host unreachable. Retrying.")
-          sleep 2
-          false
-        rescue Errno::ENETUNREACH
-          debug("SSH connection returned network unreachable. Retrying.")
-          sleep 30
-          false
-        rescue Net::SSH::Disconnect
-          debug("SSH connection has been disconnected. Retrying.")
-          sleep 15
-          false
-        rescue Net::SSH::AuthenticationFailed
-          debug("SSH authentication has failed. Password or Keys may not be in place yet. Retrying.")
-          sleep 15
-          false
-        ensure
-          sync_time = 0
-          if (config[:cloudstack_sync_time])
-            sync_time = config[:cloudstack_sync_time]
-          end
-          sleep(sync_time)
-          debug("Connecting to host and running ls")
-          ssh.run('ls')
+      rescue Errno::ETIMEDOUT
+        debug("SSH connection timed out. Retrying.")
+        sleep 2
+        false
+      rescue Errno::EPERM
+        debug("SSH connection returned error. Retrying.")
+        false
+      rescue Errno::ECONNREFUSED
+        debug("SSH connection returned connection refused. Retrying.")
+        sleep 2
+        false
+      rescue Errno::EHOSTUNREACH
+        debug("SSH connection returned host unreachable. Retrying.")
+        sleep 2
+        false
+      rescue Errno::ENETUNREACH
+        debug("SSH connection returned network unreachable. Retrying.")
+        sleep 30
+        false
+      rescue Net::SSH::Disconnect
+        debug("SSH connection has been disconnected. Retrying.")
+        sleep 15
+        false
+      rescue Net::SSH::AuthenticationFailed
+        debug("SSH authentication has failed. Password or Keys may not be in place yet. Retrying.")
+        sleep 15
+        false
+      ensure
+        sync_time = 0
+        if (config[:cloudstack_sync_time])
+          sync_time = config[:cloudstack_sync_time]
+        end
+        sleep(sync_time)
+        debug("Connecting to host and running ls")
+        ssh.run('ls')
       end
 
       def deploy_private_key(ssh)
@@ -250,12 +256,12 @@ module Kitchen
 
         if user_public_key
           ssh.run([
-                      %{mkdir .ssh},
-                      %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys}
-                  ])
+            %{mkdir .ssh},
+            %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys}
+          ])
         end
       end
-      
+
       def generate_name(base)
         # Generate what should be a unique server name
         sep = '-'
@@ -276,7 +282,6 @@ module Kitchen
         end
         pieces.join sep
       end
-
     end
   end
 end
