@@ -48,8 +48,10 @@ module Kitchen
 
       def create_server
         options = {}
+
         config[:server_name] ||= generate_name(instance.name)
         options['displayname'] = config[:server_name]
+
         if config[:cloudstack_network_id]
           options['networkids'] = config[:cloudstack_network_id]
         end
@@ -89,10 +91,13 @@ module Kitchen
         debug(server)
 
         state[:server_id] = server['deployvirtualmachineresponse'].fetch('id')
-        start_jobid = {'jobid' => server['deployvirtualmachineresponse'].fetch('jobid')}
+        start_jobid = {
+          'jobid' => server['deployvirtualmachineresponse'].fetch('jobid')
+        }
         info("CloudStack instance <#{state[:server_id]}> created.")
         debug("Job ID #{start_jobid}")
-        # Cloning the original job id hash because running the query_async_job_result updates the hash to include
+        # Cloning the original job id hash because running the
+        # query_async_job_result updates the hash to include
         # more than just the job id (which I could work around, but I'm lazy).
         jobid = start_jobid.clone
 
@@ -112,8 +117,12 @@ module Kitchen
 
         # jobstatus of 2 is an error response
         if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 2
-          errortext = server_start['queryasyncjobresultresponse'].fetch('jobresult').fetch('errortext')
+          errortext = server_start['queryasyncjobresultresponse']
+            .fetch('jobresult')
+            .fetch('errortext')
+
           error("ERROR! Job failed with #{errortext}")
+
           raise ActionFailed, "Could not create server #{errortext}"
         end
 
@@ -124,7 +133,9 @@ module Kitchen
           print "(server ready)"
 
           keypair = nil
-          if ((!config[:keypair_search_directory].nil?) and (File.exist?("#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem")))
+          if config[:keypair_search_directory] and File.exist?(
+            "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
+          )
             keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
             debug("Keypair being used is #{keypair}")
           elsif File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
@@ -142,7 +153,7 @@ module Kitchen
 
           state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
 
-          if (!keypair.nil?)
+          if keypair
             debug("Using keypair: #{keypair}")
             info("SSH for #{state[:hostname]} with keypair #{config[:cloudstack_ssh_keypair_name]}.")
             ssh_key = File.read(keypair)
@@ -155,7 +166,7 @@ module Kitchen
 
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using keypair #{keypair}.")
-          elsif (server_info.fetch('passwordenabled') == true)
+          elsif server_info.fetch('passwordenabled')
             password = server_info.fetch('password')
             config[:password] = password
             # Print out IP and password so you can record it if you want.
@@ -166,7 +177,7 @@ module Kitchen
 
             ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
-          elsif (!config[:password].nil?)
+          elsif config[:password]
             info("Connecting with user #{config[:username]} with password #{config[:password]}")
 
             wait_for_sshd(state[:hostname], config[:username], {:password => config[:password]})
