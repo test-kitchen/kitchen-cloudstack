@@ -50,23 +50,15 @@ module Kitchen
         options = {}
 
         config[:server_name] ||= generate_name(instance.name)
+
         options['displayname'] = config[:server_name]
+        options['networkids']  = config[:cloudstack_network_id]
+        options['securitygroupids'] = config[:cloudstack_security_group_id]
+        options['keypair'] = config[:cloudstack_ssh_keypair_name]
+        options['diskofferingid'] = config[:cloudstack_diskoffering_id]
+        options['name'] = config[:host_name]
 
-        if config[:cloudstack_network_id]
-          options['networkids'] = config[:cloudstack_network_id]
-        end
-
-        if config[:cloudstack_security_group_id]
-          options['securitygroupids'] = config[:cloudstack_security_group_id]
-        end
-
-        if config[:cloudstack_ssh_keypair_name]
-          options['keypair'] = config[:cloudstack_ssh_keypair_name]
-        end
-
-        if config[:cloudstack_diskoffering_id]
-          options['diskofferingid'] = config[:cloudstack_diskoffering_id]
-        end
+        options = sanitize(options)
 
         options[:templateid] = config[:cloudstack_template_id]
         options[:serviceofferingid] = config[:cloudstack_serviceoffering_id]
@@ -281,6 +273,12 @@ module Kitchen
           end
         end
         pieces.join sep
+      end
+
+      private
+
+      def sanitize(options)
+        options.reject { |k, v| v.nil? }
       end
     end
   end
