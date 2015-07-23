@@ -52,7 +52,11 @@ behavior can be overridden with additional options (e.g., to specify a SSH priva
     public_key_path: [PATH TO YOUR SSH PUBLIC KEY]
     username: [SSH USER]
     port: [SSH PORT]
-    host_name: [A UNIQUE HOST NAME] (Useful if facing ENAMETOOLONG exceptions in the chef run caused by long generated hostnames)
+
+host_name setting is  useful if you are facing ENAMETOOLONG exceptions in the 
+chef run caused by long generated hostnames)
+
+    host_name: [A UNIQUE HOST NAME]
 
 Only disable SSL cert validation if you absolutely know what you are doing,
 but are stuck with an CloudStack deployment without valid SSL certs.
