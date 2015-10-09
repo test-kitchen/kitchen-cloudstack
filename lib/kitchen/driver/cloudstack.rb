@@ -190,8 +190,19 @@ module Kitchen
         return unless state[:server_id]
         debug("Destroying #{state[:server_id]}")
         server = compute.servers.get(state[:server_id])
+        expunge =
+          if !!config[:cloudstack_expunge] == config[:cloudstack_expunge]
+            config[:cloudstack_expunge]
+          else
+            false
+          end
         if server
-          compute.destroy_virtual_machine({'id' => state[:server_id]})
+          compute.destroy_virtual_machine(
+            {
+              'id' => state[:server_id],
+              'expunge' => expunge
+            }
+          )
         end
         info("CloudStack instance <#{state[:server_id]}> destroyed.")
         state.delete(:server_id)

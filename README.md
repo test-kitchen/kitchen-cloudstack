@@ -22,6 +22,7 @@ Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
       cloudstack_api_url: [YOUR CLOUDSTACK API URL]
       require_chef_omnibus: latest (if you'll be using Chef)
     OPTIONAL
+      cloudstack_expunge: [TRUE/FALSE] # Whether or not you want the instance to be expunged, default false.
       cloudstack_sync_time: [NUMBER OF SECONDS TO WAIT FOR CLOUD-SET-GUEST-PASSWORD/SSHKEY]
       keypair_search_directory: [PATH TO DIRECTORY (other than ~, ., and ~/.ssh) WITH KEYPAIR PEM FILE]
       cloudstack_vm_public_ip: [PUBLIC_IP] # In case you use advanced networking and do static NAT manually.
