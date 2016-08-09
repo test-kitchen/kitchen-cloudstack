@@ -42,6 +42,7 @@ module Kitchen
           :cloudstack_host => cloudstack_uri.host,
           :cloudstack_port => cloudstack_uri.port,
           :cloudstack_path => cloudstack_uri.path,
+          :cloudstack_project_id => config[:cloudstack_project_id],
           :cloudstack_scheme => cloudstack_uri.scheme
         )
       end
