@@ -59,10 +59,10 @@ module Kitchen
         options['keypair'] = config[:cloudstack_ssh_keypair_name]
         options['diskofferingid'] = config[:cloudstack_diskoffering_id]
         options['name'] = config[:host_name]
+        options[:userdata] = convert_userdata(config[:cloudstack_userdata]) if config[:cloudstack_userdata]
 
         options = sanitize(options)
 
-        options[:userdata] = convert_userdata(config[:cloudstack_userdata])
         options[:templateid] = config[:cloudstack_template_id]
         options[:serviceofferingid] = config[:cloudstack_serviceoffering_id]
         options[:zoneid] = config[:cloudstack_zone_id]
