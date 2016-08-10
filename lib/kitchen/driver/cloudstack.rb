@@ -21,6 +21,7 @@ require 'kitchen'
 require 'fog'
 require 'socket'
 require 'openssl'
+require 'base64'
 
 module Kitchen
   module Driver
@@ -42,6 +43,7 @@ module Kitchen
           :cloudstack_host => cloudstack_uri.host,
           :cloudstack_port => cloudstack_uri.port,
           :cloudstack_path => cloudstack_uri.path,
+          :cloudstack_project_id => config[:cloudstack_project_id],
           :cloudstack_scheme => cloudstack_uri.scheme
         )
       end
@@ -57,6 +59,7 @@ module Kitchen
         options['keypair'] = config[:cloudstack_ssh_keypair_name]
         options['diskofferingid'] = config[:cloudstack_diskoffering_id]
         options['name'] = config[:host_name]
+        options[:userdata] = convert_userdata(config[:cloudstack_userdata]) if config[:cloudstack_userdata]
 
         options = sanitize(options)
 
@@ -290,6 +293,14 @@ module Kitchen
 
       def sanitize(options)
         options.reject { |k, v| v.nil? }
+      end
+
+      def convert_userdata(user_data)
+        if user_data.match /^(?:[A-Za-z0-9+\/]{4}\n?)*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/
+          user_data
+        else
+          Base64.encode64(user_data)
+        end
       end
     end
   end
