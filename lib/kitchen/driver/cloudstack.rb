@@ -21,6 +21,7 @@ require 'kitchen'
 require 'fog'
 require 'socket'
 require 'openssl'
+require 'base64'
 
 module Kitchen
   module Driver
@@ -61,6 +62,7 @@ module Kitchen
 
         options = sanitize(options)
 
+        options[:userdata] = convert_userdata(config[:cloudstack_userdata])
         options[:templateid] = config[:cloudstack_template_id]
         options[:serviceofferingid] = config[:cloudstack_serviceoffering_id]
         options[:zoneid] = config[:cloudstack_zone_id]
@@ -291,6 +293,14 @@ module Kitchen
 
       def sanitize(options)
         options.reject { |k, v| v.nil? }
+      end
+
+      def convert_userdata(user_data)
+        if user_data.match /^(?:[A-Za-z0-9+\/]{4}\n?)*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/
+          user_data
+        else
+          Base64.encode64(user_data)
+        end
       end
     end
   end
