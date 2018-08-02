@@ -146,7 +146,14 @@ module Kitchen
             info("Keypair specified but not found. Using password if enabled.")
           end
 
-          state[:hostname] = config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
+          if config[:associate_public_ip]
+            info("Associating public ip...")
+            state[:hostname] = associate_public_ip(state, server_info)
+            info("Creating port forward...")
+            create_port_forward(state, server_info['id'])
+          else
+            state[:hostname] = default_public_ip(server_info) unless config[:associate_public_ip]
+          end
 
           if keypair
             debug("Using keypair: #{keypair}")
@@ -191,6 +198,10 @@ module Kitchen
 
       def destroy(state)
         return unless state[:server_id]
+        if config[:associate_public_ip]
+          delete_port_forward(state)
+          release_public_ip(state)
+        end
         debug("Destroying #{state[:server_id]}")
         server = compute.servers.get(state[:server_id])
         expunge =
@@ -301,6 +312,93 @@ module Kitchen
         else
           Base64.encode64(user_data)
         end
+      end
+
+      def associate_public_ip(state, server_info)
+        options = {
+          'zoneid' => config[:cloudstack_zone_id],
+          'vpcid' => get_vpc_id
+        }
+        res = compute.associate_ip_address(options)
+        job_status = compute.query_async_job_result(res['associateipaddressresponse']['jobid'])
+        if job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
+          save_ipaddress_id(state, job_status)
+          get_public_ip(res['associateipaddressresponse']['id'])
+        else
+          error(job_status['queryasyncjobresultresponse'].fetch('jobresult'))
+        end
+      end
+
+      def create_port_forward(state, virtualmachineid)
+        options = {
+          'ipaddressid' => state[:ipaddressid],
+          'privateport' => 22,
+          'protocol' => "TCP",
+          'publicport' => 22,
+          'virtualmachineid' => virtualmachineid,
+          'networkid' => config[:cloudstack_network_id],
+          'openfirewall' => false
+        }
+        res = compute.create_port_forwarding_rule(options)
+        job_status = compute.query_async_job_result(res['createportforwardingruleresponse']['jobid'])
+        unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+          error("Error creating port forwarding rules")
+        end
+        save_forwarding_port_rule_id(state, res['createportforwardingruleresponse']['id'])
+      end
+
+      def release_public_ip(state)
+        info("Disassociating public ip...")
+        begin
+          res = compute.disassociate_ip_address(state[:ipaddressid])
+        rescue Fog::Compute::Cloudstack::BadRequest => e
+          error(e) unless e.to_s.match?(/does not exist/)
+        else
+          job_status = compute.query_async_job_result(res['disassociateipaddressresponse']['jobid'])
+          unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+            error("Error disassociating public ip")
+          end
+        end
+      end
+
+      def delete_port_forward(state)
+        info("Deleting port forwarding rules...")
+        begin
+          res = compute.delete_port_forwarding_rule(state[:forwardingruleid])
+        rescue Fog::Compute::Cloudstack::BadRequest => e
+          error(e) unless e.to_s.match?(/does not exist/)
+        else
+          job_status = compute.query_async_job_result(res['deleteportforwardingruleresponse']['jobid'])
+          unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+            error("Error deleting port forwarding rules")
+          end
+        end
+      end
+
+      def get_vpc_id
+        compute.list_networks['listnetworksresponse']['network']
+          .select{|e| e['id'] == config[:cloudstack_network_id]}.first['vpcid']
+      end
+
+      def get_public_ip(public_ip_uuid)
+        compute.list_public_ip_addresses['listpublicipaddressesresponse']['publicipaddress']
+          .select{|e| e['id'] == public_ip_uuid}
+          .first['ipaddress']
+      end
+
+      def save_ipaddress_id(state, job_status)
+        state[:ipaddressid] = job_status['queryasyncjobresultresponse']
+                                .fetch('jobresult')
+                                .fetch('ipaddress')
+                                .fetch('id')
+      end
+
+      def save_forwarding_port_rule_id(state, uuid)
+        state[:forwardingruleid] = uuid
+      end
+
+      def default_public_ip(server_info)
+        config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
       end
     end
   end
