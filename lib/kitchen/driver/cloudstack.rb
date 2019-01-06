@@ -289,11 +289,11 @@ module Kitchen
           Array.new(8) { rand(36).to_s(36) }.join
         ]
         until pieces.join(sep).length <= 64 do
-          if pieces[2].length > 24
+          if pieces[2] && pieces[2].length > 24
             pieces[2] = pieces[2][0..-2]
-          elsif pieces[1].length > 16
+          elsif pieces[1] && pieces[1].length > 16
             pieces[1] = pieces[1][0..-2]
-          elsif pieces[0].length > 16
+          elsif pieces[0] && pieces[0].length > 16
             pieces[0] = pieces[0][0..-2]
           end
         end
