@@ -33,6 +33,7 @@ module Kitchen
       default_config :username,         'root'
       default_config :port,             '22'
       default_config :password,         nil
+      default_config :cloudstack_create_firewall_rule, false
 
       def compute
         cloudstack_uri =  URI.parse(config[:cloudstack_api_url])
@@ -323,10 +324,42 @@ module Kitchen
         job_status = compute.query_async_job_result(res['associateipaddressresponse']['jobid'])
         if job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
           save_ipaddress_id(state, job_status)
-          get_public_ip(res['associateipaddressresponse']['id'])
+          ip_address = get_public_ip(res['associateipaddressresponse']['id'])
         else
           error(job_status['queryasyncjobresultresponse'].fetch('jobresult'))
         end
+
+        if config[:cloudstack_create_firewall_rule]
+          info("Creating firewall rule for SSH")
+          # create firewallrule projectid=<project> cidrlist=<0.0.0.0/0 or your source> protocol=tcp startport=0 endport=65535 (or you can restrict to 22 if you want) ipaddressid=<public ip address id>
+          options = {
+            'projectid' => config[:cloudstack_project_id],
+            'cidrlist' => '0.0.0.0/0',
+            'protocol' => 'tcp',
+            'startport' => 22,
+            'endport' => 22,
+            'ipaddressid' => state[:ipaddressid]
+          }
+          res = compute.create_firewall_rule(options)
+          status = 0
+          timeout = 10
+          while status == 0
+            job_status = compute.query_async_job_result(res['createfirewallruleresponse']['jobid'])
+            status = job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i
+            timeout -= 1
+            error("Failed to create firewall rule by timeout") if timeout == 0
+            sleep 1
+          end
+
+          if job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
+            save_firewall_rule_id(state, job_status)
+            info('Firewall rule successfully created')
+          else
+            error(job_status['queryasyncjobresultresponse'])
+          end
+        end
+
+        ip_address
       end
 
       def create_port_forward(state, virtualmachineid)
@@ -357,6 +390,21 @@ module Kitchen
           job_status = compute.query_async_job_result(res['disassociateipaddressresponse']['jobid'])
           unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
             error("Error disassociating public ip")
+          end
+        end
+
+        if state[:firewall_rule_id]
+          info("Removing firewall rule '#{state[:firewall_rule_id]}'")
+
+          begin
+            res = compute.delete_firewall_rule(state[:firewall_rule_id])
+          rescue Fog::Compute::Cloudstack::BadRequest => e
+            error(e) unless e.to_s.match?(/does not exist/)
+          else
+            job_status = compute.query_async_job_result(res['deletefirewallruleresponse']['jobid'])
+            unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+              error("Error removing firewall rule '#{state[:firewall_rule_id]}'")
+            end
           end
         end
       end
@@ -390,6 +438,13 @@ module Kitchen
         state[:ipaddressid] = job_status['queryasyncjobresultresponse']
                                 .fetch('jobresult')
                                 .fetch('ipaddress')
+                                .fetch('id')
+      end
+
+      def save_firewall_rule_id(state, job_status)
+        state[:firewall_rule_id] = job_status['queryasyncjobresultresponse']
+                                .fetch('jobresult')
+                                .fetch('firewallrule')
                                 .fetch('id')
       end
 
