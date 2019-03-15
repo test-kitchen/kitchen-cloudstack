@@ -28,6 +28,7 @@ Provide, at a minimum, the required driver options in your `.kitchen.yml` file:
       cloudstack_project_id: [PROJECT_ID] # To deploy VMs into project.
       cloudstack_vm_public_ip: [PUBLIC_IP] # In case you use advanced networking and do static NAT manually.
       associate_public_ip: [TRUE/FALSE] # If you want kitchen to automatically associate a public IP, default false.
+      cloudstack_create_firewall_rule: [TRUE/FALSE] # If you want Kitchen to automatically create firewall rule for public IP to reach SSH (port 22)
       cloudstack_userdata: "#cloud-config\npackages:\n - htop\n" # double quote required.
 
 Then to specify different OS templates,

@@ -21,6 +21,6 @@ module Kitchen
   module Driver
 
     # Version string for Cloudstack Kitchen driver
-    CLOUDSTACK_VERSION = "0.23.1"
+    CLOUDSTACK_VERSION = "0.23.2"
   end
 end
