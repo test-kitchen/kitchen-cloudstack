@@ -318,7 +318,8 @@ module Kitchen
       def associate_public_ip(state, server_info)
         options = {
           'zoneid' => config[:cloudstack_zone_id],
-          'vpcid' => get_vpc_id
+          'vpcid' => get_vpc_id,
+          'networkid' => config[:cloudstack_network_id]
         }
         res = compute.associate_ip_address(options)
         job_status = compute.query_async_job_result(res['associateipaddressresponse']['jobid'])
