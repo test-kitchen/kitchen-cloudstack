@@ -57,9 +57,14 @@ module Kitchen
         options['displayname'] = config[:server_name]
         options['networkids']  = config[:cloudstack_network_id]
         options['securitygroupids'] = config[:cloudstack_security_group_id]
+        options['affinitygroupids'] = config[:cloudstack_affinity_group_id]
         options['keypair'] = config[:cloudstack_ssh_keypair_name]
         options['diskofferingid'] = config[:cloudstack_diskoffering_id]
+        options['size'] = config[:cloudstack_diskoffering_size]
         options['name'] = config[:host_name]
+        options['details[0].cpuNumber'] = config[:cloudstack_serviceoffering_cpu]
+        options['details[0].cpuSpeed'] = config[:cloudstack_serviceoffering_cpuspeed]
+        options['details[0].memory'] = config[:cloudstack_serviceoffering_memory]
         options[:userdata] = convert_userdata(config[:cloudstack_userdata]) if config[:cloudstack_userdata]
 
         options = sanitize(options)
