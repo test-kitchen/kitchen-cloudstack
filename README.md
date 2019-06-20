@@ -40,11 +40,16 @@ Then to specify different OS templates,
     OPTIONAL
       cloudstack_network_id: [NETWORK ID FOR ISOLATED OR VPC NETWORKS]
       cloudstack_security_group_id: [SECURITY GROUP ID FOR SHARED NETWORKS]
+      cloudstack_affinity_group_id: [AFFINITY GROUP ID FOR DEDICATED CLUSTER]
+      cloudstack_serviceoffering_cpu: [THE NUMBER OF CPU FOR A SERVICE OFFERING THAT DOES NOT SPECIFY CPU]
+      cloudstack_serviceoffering_cpuspeed: [THE SPEED OF EACH CPU FOR A SERVICE OFFERING THAT DOES NOT SPECIFY CPU]
+      cloudstack_serviceoffering_memory: [THE AMOUNT OF MEMORY IN MB FOR A SERVICE OFFERING THAT DOES NOT SPECIFY MEMORY]
       cloudstack_diskoffering_id: [INSTANCE DISK OFFERING ID]
+      cloudstack_diskoffering_size: [INSTANCE DISK OFFERING SIZE IN GB]
       cloudstack_ssh_keypair_name: [SSH KEY NAME]
       cloudstack_sync_time: [NUMBER OF SECONDS TO WAIT FOR CLOUD-SET-GUEST-PASSWORD/SSHKEY]
 To use the CloudStack public key provider, you need to have the .PEM file located in the same directory as
-your .kitchen.yml file, your home directory (~), your .ssh directory (~/.ssh/), or specify a directory (without any
+your .kitchen.yml file, your home directory (\~), your .ssh directory (\~/.ssh/), or specify a directory (without any
 trailing slahses) as your "keypair_search_directory" and the file be named the same as the Keypair on CloudStack
 suffixed with .pem (e.g. the Keypair named "TestKey" should be located in one of the searched directories and named
 "TestKey.pem"). 
