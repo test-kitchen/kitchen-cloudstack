@@ -18,7 +18,7 @@
 
 require 'benchmark'
 require 'kitchen'
-require 'fog'
+require 'fog/cloudstack'
 require 'socket'
 require 'openssl'
 require 'base64'
