@@ -16,12 +16,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'benchmark'
+require 'benchmark' unless defined?(Benchmark)
 require 'kitchen'
 require 'fog/cloudstack'
-require 'socket'
-require 'openssl'
-require 'base64'
+require 'socket' unless defined?(Socket)
+require 'openssl' unless defined?(OpenSSL)
+require 'base64' unless defined?(Base64)
 
 module Kitchen
   module Driver
@@ -84,7 +84,7 @@ module Kitchen
             "#{Socket.gethostname}-#{Array.new(8){rand(36).to_s(36)}.join}"
         end
         if config[:disable_ssl_validation]
-          require 'excon'
+          require 'excon' unless defined?(Excon)
           Excon.defaults[:ssl_verify_peer] = false
         end
 
