@@ -68,6 +68,7 @@ module Kitchen
           :cloudstack_host => cloudstack_uri.host,
           :cloudstack_port => cloudstack_uri.port,
           :cloudstack_path => cloudstack_uri.path,
+          :cloudstack_project_id => config[:cloudstack_project_id],
           :cloudstack_scheme => cloudstack_uri.scheme
         )
       end
@@ -119,14 +120,15 @@ module Kitchen
         state[:password] = server_info['password']
         state[:hostname] = server_info['nic'][0]['ipaddress']
 
-        info "Cloudstack instance <#{state[:server_id]}> has ip #{state[:hostname]} and is booting. Waiting for ssh to be available."
+        info "Cloudstack instance <#{state[:server_id]}> has ip #{state[:hostname]} and password #{state[:password]}"
+        info "Waiting for the machine to finish booting and to be remotely accessible."
 
-        ssh_connection = instance.transport.connection(state)
-        ssh_connection.wait_until_ready
+        remote_connection = instance.transport.connection(state)
+        remote_connection.wait_until_ready
 
         if not config[:cloudstack_post_install_script].nil?
-          ssh_connection.execute(config[:cloudstack_post_install_script])
-          ssh_connection.close()
+          remote_connection.execute(config[:cloudstack_post_install_script])
+          remote_connection.close()
         end
 
         info "Cloudstack instance <#{state[:server_id]}> is fully booted and ready."
