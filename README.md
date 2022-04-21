@@ -7,9 +7,21 @@ A Test Kitchen Driver for Apache CloudStack / Citrix CloudPlatform.
 This Gem only requires FOG of a version greater than 1.3.1. However, as most of your knife plugins will be using newer
 versions of FOG, that shouldn't be an issue.
 
-## <a name="installation"></a> Installation and Setup
+## <a name="installation"></a> Installation
 
-Please read the [Driver usage][driver_usage] page for more details.
+Add this line to your application's Gemfile:
+
+```ruby
+gem 'kitchen-cloudstack'
+```
+
+And then execute:
+
+    $ bundle
+
+Or install it yourself as:
+
+    $ gem install kitchen-cloudstack
 
 ## <a name="config"></a> Configuration
 
@@ -117,5 +129,4 @@ Apache 2.0 (see [LICENSE][license])
 [issues]:           https://github.com/test-kitchen/kitchen-cloudstack/issues
 [license]:          https://github.com/test-kitchen/kitchen-cloudstack/blob/master/LICENSE
 [repo]:             https://github.com/test-kitchen/kitchen-cloudstack
-[driver_usage]:     http://docs.kitchen-ci.org/drivers/usage
 [chef_omnibus_dl]:  http://getchef.com/chef/install/
