@@ -24,7 +24,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rake'
 
   spec.add_development_dependency 'cane', '~> 3'
-  spec.add_development_dependency 'tailor', '~> 1'
   spec.add_development_dependency 'countloc'
   spec.add_development_dependency 'pry'
 end
