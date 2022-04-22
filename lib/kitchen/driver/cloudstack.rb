@@ -80,8 +80,24 @@ module Kitchen
           return
         end
 
-        api_client = cloudstack_api_client
+        server_payload = generate_server_payload
+        server_info = create_instance(server_payload)
 
+        state[:server_id] = server_info['id']
+        state[:password] = server_info['password']
+        state[:hostname] = server_info['nic'][0]['ipaddress']
+
+        info "Cloudstack instance <#{state[:server_id]}> has ip #{state[:hostname]} and password #{state[:password]}"
+
+        wait_for_instance_reachable(state)
+
+        info "Cloudstack instance <#{state[:server_id]}> is fully booted and ready."
+      rescue Fog::Errors::Error, Excon::Errors::Error => ex
+        raise ActionFailed, ex.message
+      end
+
+      def generate_server_payload
+        api_client = cloudstack_api_client
         server_payload = {
           :displayname => config[:server_name],
           :networkids => get_network_id(api_client),
@@ -97,10 +113,14 @@ module Kitchen
         if not config[:cloudstack_rootdisksize].nil?
           server_payload[:rootdisksize] = config[:cloudstack_rootdisksize].to_s.gsub(/\s?GB$/, '').to_i
         end
+        server_payload
+      end
+
+      def create_instance(server_payload)
+        api_client = cloudstack_api_client
 
         server = api_client.deploy_virtual_machine(server_payload)
-        state[:server_id] = server['deployvirtualmachineresponse']['id']
-        info "Cloudstack instance <#{state[:server_id]}> is starting."
+        info "Cloudstack instance <#{server['deployvirtualmachineresponse']['id']}> is starting."
 
         server_start = api_client.query_async_job_result({
           'jobid' => server['deployvirtualmachineresponse']['jobid'],
@@ -115,12 +135,10 @@ module Kitchen
           raise ActionFailed, "Could not create server #{server_start['queryasyncjobresultresponse']['jobresult']['errortext']}"
         end
 
-        server_info = server_start['queryasyncjobresultresponse']['jobresult']['virtualmachine']
+        server_start['queryasyncjobresultresponse']['jobresult']['virtualmachine']
+      end
 
-        state[:password] = server_info['password']
-        state[:hostname] = server_info['nic'][0]['ipaddress']
-
-        info "Cloudstack instance <#{state[:server_id]}> has ip #{state[:hostname]} and password #{state[:password]}"
+      def wait_for_instance_reachable(state)
         info "Waiting for the machine to finish booting and to be remotely accessible."
 
         remote_connection = instance.transport.connection(state)
@@ -130,10 +148,6 @@ module Kitchen
           remote_connection.execute(config[:cloudstack_post_install_script])
           remote_connection.close()
         end
-
-        info "Cloudstack instance <#{state[:server_id]}> is fully booted and ready."
-      rescue Fog::Errors::Error, Excon::Errors::Error => ex
-        raise ActionFailed, ex.message
       end
 
       def destroy(state)
@@ -157,8 +171,6 @@ module Kitchen
       def default_name
         [
           instance.name.gsub(/\W/, "")[0..14],
-          ((Etc.getpwuid ? Etc.getpwuid.name : Etc.getlogin) || "nologin").gsub(/\W/, "")[0..14],
-          Socket.gethostname.gsub(/\W/, "")[0..22],
           Array.new(7) { rand(36).to_s(36) }.join,
         ].join("-")
       end
