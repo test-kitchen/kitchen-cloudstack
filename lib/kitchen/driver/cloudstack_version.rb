@@ -1,4 +1,5 @@
 # -*- encoding: utf-8 -*-
+# frozen_string_literal: true
 #
 # Author:: Jeff Moody (<fifthecho@gmail.com>)
 #
@@ -21,6 +22,6 @@ module Kitchen
   module Driver
 
     # Version string for Cloudstack Kitchen driver
-    CLOUDSTACK_VERSION = "0.24.0"
+    CLOUDSTACK_VERSION = "0.25.0"
   end
 end
