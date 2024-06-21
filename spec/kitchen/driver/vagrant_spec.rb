@@ -25,7 +25,7 @@ require "kitchen/provisioner/dummy"
 require "kitchen/transport/dummy"
 require "kitchen/verifier/dummy"
 
-describe Kitchen::Driver::Vagrant do
+describe Kitchen::Driver::Cloudstack do
 
   let(:logged_output) { StringIO.new }
   let(:logger)        { Logger.new(logged_output) }
@@ -40,7 +40,7 @@ describe Kitchen::Driver::Vagrant do
   let(:state_file)    { double("state_file") }
   let(:env)           { {} }
 
-  let(:driver_object) { Kitchen::Driver::Vagrant.new(config) }
+  let(:driver_object) { Kitchen::Driver::Cloudstack.new() }
 
   let(:driver) do
     d = driver_object
@@ -73,22 +73,22 @@ describe Kitchen::Driver::Vagrant do
   end
 
   before(:all) do
-    Kitchen::Driver::Vagrant.instance_eval { include RunCommandStub }
+    Kitchen::Driver::Cloudstack.instance_eval { include RunCommandStub }
   end
 
   before(:each) { stub_const("ENV", env) }
 
   after do
-    driver_object.class.send(:vagrant_version=, nil)
+    driver_object.class.send(:cloudstack_version=, nil)
   end
 
   it "driver api_version is 2" do
     expect(driver.diagnose_plugin[:api_version]).to eq(2)
   end
 
-  it "plugin_version is set to Kitchen::Vagrant::VERSION" do
+  it "plugin_version is set to Kitchen::Cloudstack::VERSION" do
     expect(driver.diagnose_plugin[:version]).to eq(
-      Kitchen::Driver::VAGRANT_VERSION
+      Kitchen::Driver::CLOUDSTACK_VERSION
     )
   end
 
@@ -299,11 +299,11 @@ describe Kitchen::Driver::Vagrant do
       expect(driver[:pre_create_command]).to eq("execute yo")
     end
 
-    it "replaces {{vagrant_root}} in :pre_create_command" do
-      config[:pre_create_command] = "{{vagrant_root}}/candy"
+    it "replaces {{cloudstack_root}} in :pre_create_command" do
+      config[:pre_create_command] = "{{cloudstack_root}}/candy"
 
       expect(driver[:pre_create_command]).to eq(
-        "/kroot/.kitchen/kitchen-vagrant/suitey-fooos-99/candy"
+        "/kroot/.kitchen/kitchen-cloudstack/suitey-fooos-99/candy"
       )
     end
 
@@ -321,8 +321,8 @@ describe Kitchen::Driver::Vagrant do
       expect(driver[:provider]).to eq("virtualbox")
     end
 
-    it "sets :provider to the value of VAGRANT_DEFAULT_PROVIDER from ENV" do
-      env["VAGRANT_DEFAULT_PROVIDER"] = "vcool"
+    it "sets :provider to the value of CLOUDSTACK_DEFAULT_PROVIDER from ENV" do
+      env["CLOUDSTACK_DEFAULT_PROVIDER"] = "vcool"
 
       expect(driver[:provider]).to eq("vcool")
     end
@@ -408,45 +408,45 @@ describe Kitchen::Driver::Vagrant do
       ])
     end
 
-    it "sets :vagrant_binary to 'vagrant' by default" do
-      expect(driver[:vagrant_binary]).to eq("vagrant")
+    it "sets :cloudstack_binary to 'cloudstack' by default" do
+      expect(driver[:cloudstack_binary]).to eq("cloudstack")
     end
 
-    it "sets :vagrant_binary to a custom value" do
-      config[:vagrant_binary] = "vagrant.cmd"
-      expect(driver[:vagrant_binary]).to eq("vagrant.cmd")
+    it "sets :cloudstack_binary to a custom value" do
+      config[:cloudstack_binary] = "cloudstack.cmd"
+      expect(driver[:cloudstack_binary]).to eq("cloudstack.cmd")
     end
 
-    it "sets :vagrantfile_erb to a default" do
-      expect(driver[:vagrantfile_erb]).to match(
-        %r{/kitchen-vagrant/templates/Vagrantfile\.erb$}
+    it "sets :cloudstackfile_erb to a default" do
+      expect(driver[:cloudstackfile_erb]).to match(
+        %r{/kitchen-cloudstack/templates/cloudstackfile\.erb$}
       )
     end
 
-    it "sets :vagrantfile_erb to a default value" do
-      config[:vagrantfile_erb] = "/a/Vagrantfile.erb"
+    it "sets :cloudstackfile_erb to a default value" do
+      config[:cloudstackfile_erb] = "/a/cloudstackfile.erb"
 
-      expect(driver[:vagrantfile_erb]).to eq(
-        File.expand_path("/a/Vagrantfile.erb")
+      expect(driver[:cloudstackfile_erb]).to eq(
+        File.expand_path("/a/cloudstackfile.erb")
       )
     end
 
-    it "expands path for :vagrantfile_erb" do
-      config[:vagrantfile_erb] = "Yep.erb"
+    it "expands path for :cloudstackfile_erb" do
+      config[:cloudstackfile_erb] = "Yep.erb"
 
-      expect(driver[:vagrantfile_erb]).to eq(
+      expect(driver[:cloudstackfile_erb]).to eq(
         File.expand_path("/kroot/Yep.erb")
       )
     end
 
-    it "sets :vagrantfiles to an empty array by default" do
-      expect(driver[:vagrantfiles]).to eq([])
+    it "sets :cloudstackfiles to an empty array by default" do
+      expect(driver[:cloudstackfiles]).to eq([])
     end
 
-    it "sets and expands paths in :vagrantfiles" do
-      config[:vagrantfiles] = %w{one two three}
+    it "sets and expands paths in :cloudstackfiles" do
+      config[:cloudstackfiles] = %w{one two three}
 
-      expect(driver[:vagrantfiles]).to eq(
+      expect(driver[:cloudstackfiles]).to eq(
         %w{/kroot/one /kroot/two /kroot/three}.map { |f| File.expand_path(f) }
       )
     end
@@ -456,7 +456,7 @@ describe Kitchen::Driver::Vagrant do
       before { allow(platform).to receive(:os_type).and_return("unix") }
 
       it "sets :vm_hostname to the instance name by default" do
-        expect(driver[:vm_hostname]).to eq("suitey-fooos-99.vagrantup.com")
+        expect(driver[:vm_hostname]).to eq("suitey-fooos-99.cloudstackup.com")
       end
 
       it "sets :vm_hostname to a custom value" do
@@ -525,32 +525,32 @@ describe Kitchen::Driver::Vagrant do
 
   describe "#verify_dependencies" do
 
-    it "passes for supported versions of Vagrant" do
-      with_modern_vagrant
+    it "passes for supported versions of cloudstack" do
+      with_modern_cloudstack
 
       driver.verify_dependencies
     end
 
-    it "passes for supported versions of Vagrant when it has no instances" do
-      with_modern_vagrant
+    it "passes for supported versions of cloudstack when it has no instances" do
+      with_modern_cloudstack
 
       driver_with_no_instance.verify_dependencies
     end
 
-    it "raises a UserError for unsupported versions of Vagrant" do
-      with_unsupported_vagrant
+    it "raises a UserError for unsupported versions of cloudstack" do
+      with_unsupported_cloudstack
 
       expect { driver.verify_dependencies }.to raise_error(
         Kitchen::UserError, /Please upgrade to version 2.4.0 or higher/
       )
     end
 
-    it "raises a UserError for a missing Vagrant command" do
+    it "raises a UserError for a missing cloudstack command" do
       allow(driver_object).to receive(:run_command)
-        .with("vagrant --version", any_args).and_raise(Errno::ENOENT)
+        .with("cloudstack --version", any_args).and_raise(Errno::ENOENT)
 
       expect { driver.verify_dependencies }.to raise_error(
-        Kitchen::UserError, /Vagrant 2.4.0 or higher is not installed/
+        Kitchen::UserError, /cloudstack 2.4.0 or higher is not installed/
       )
     end
   end
@@ -559,9 +559,9 @@ describe Kitchen::Driver::Vagrant do
 
     let(:cmd) { driver.create(state) }
 
-    let(:vagrant_root) do
+    let(:cloudstack_root) do
       File.join(%W{
-        #{@dir} .kitchen kitchen-vagrant suitey-fooos-99
+        #{@dir} .kitchen kitchen-cloudstack suitey-fooos-99
       })
     end
 
@@ -570,25 +570,25 @@ describe Kitchen::Driver::Vagrant do
       config[:kitchen_root] = @dir
 
       allow(driver).to receive(:run_command).and_return("")
-      with_modern_vagrant
+      with_modern_cloudstack
     end
 
     after do
       FileUtils.remove_entry_secure(@dir)
     end
 
-    it "logs a message on debug level for creating the Vagrantfile" do
+    it "logs a message on debug level for creating the cloudstackfile" do
       cmd
 
       expect(logged_output.string).to match(
-        /^D, .+ DEBUG -- : Creating Vagrantfile for \<suitey-fooos-99\> /
+        /^D, .+ DEBUG -- : Creating cloudstackfile for \<suitey-fooos-99\> /
       )
     end
 
-    it "creates a Vagrantfile in the vagrant root directory" do
+    it "creates a cloudstackfile in the cloudstack root directory" do
       cmd
 
-      expect(File.exist?(File.join(vagrant_root, "Vagrantfile"))).to eq(true)
+      expect(File.exist?(File.join(cloudstack_root, "cloudstackfile"))).to eq(true)
     end
 
     it "calls Transport's #wait_until_ready" do
@@ -599,23 +599,23 @@ describe Kitchen::Driver::Vagrant do
       cmd
     end
 
-    it "logs the Vagrantfile contents on debug level" do
+    it "logs the cloudstackfile contents on debug level" do
       cmd
 
       expect(debug_lines).to match(Regexp.new(<<-REGEXP.gsub(/^ {8}/, "")))
         ------------
-        Vagrant.configure\("2"\) do \|c\|
+        cloudstack.configure\("2"\) do \|c\|
         .*
         end
         ------------
       REGEXP
     end
 
-    it "raises ActionFailed if a custom Vagrantfile template was not found" do
-      config[:vagrantfile_erb] = "/a/bunch/of/nope"
+    it "raises ActionFailed if a custom cloudstackfile template was not found" do
+      config[:cloudstackfile_erb] = "/a/bunch/of/nope"
 
       expect { cmd }.to raise_error(
-        Kitchen::ActionFailed, /^Could not find Vagrantfile template/
+        Kitchen::ActionFailed, /^Could not find cloudstackfile template/
       )
     end
 
@@ -626,26 +626,26 @@ describe Kitchen::Driver::Vagrant do
       cmd
     end
 
-    it "runs vagrant up with --no-provision if :provision is falsey" do
+    it "runs cloudstack up with --no-provision if :provision is falsey" do
       config[:provision] = false
       expect(driver).to receive(:run_command)
-        .with("vagrant up --no-provision --provider virtualbox", any_args)
+        .with("cloudstack up --no-provision --provider virtualbox", any_args)
 
       cmd
     end
 
-    it "runs vagrant up without --no-provision if :provision is truthy" do
+    it "runs cloudstack up without --no-provision if :provision is truthy" do
       config[:provision] = true
       expect(driver).to receive(:run_command)
-        .with("vagrant up --provider virtualbox", any_args)
+        .with("cloudstack up --provider virtualbox", any_args)
 
       cmd
     end
 
-    it "runs vagrant up with a custom provider if :provider is set" do
+    it "runs cloudstack up with a custom provider if :provider is set" do
       config[:provider] = "bananas"
       expect(driver).to receive(:run_command)
-        .with("vagrant up --no-provision --provider bananas", any_args)
+        .with("cloudstack up --no-provision --provider bananas", any_args)
 
       cmd
     end
@@ -658,7 +658,7 @@ describe Kitchen::Driver::Vagrant do
           <<-OUTPUT.gsub(/^ {10}/, "")
             Host hehe
               HostName 192.168.32.64
-              User vagrant
+              User cloudstack
               Port 2022
               UserKnownHostsFile /dev/null
               StrictHostKeyChecking no
@@ -672,7 +672,7 @@ describe Kitchen::Driver::Vagrant do
         before do
           allow(transport).to receive(:name).and_return("Coolness")
           allow(driver).to receive(:run_command)
-            .with("vagrant ssh-config", any_args).and_return(output)
+            .with("cloudstack ssh-config", any_args).and_return(output)
         end
 
         it "sets :hostname from ssh-config" do
@@ -690,7 +690,7 @@ describe Kitchen::Driver::Vagrant do
         it "sets :username from ssh-config" do
           cmd
 
-          expect(state).to include(username: "vagrant")
+          expect(state).to include(username: "cloudstack")
         end
 
         it "does not set :password by default" do
@@ -732,7 +732,7 @@ describe Kitchen::Driver::Vagrant do
           <<-OUTPUT.gsub(/^ {10}/, "")
             Host hehe
               HostName 192.168.32.64
-              User vagrant
+              User cloudstack
               Password yep
               Port 9999
               RDPPort 5555
@@ -742,7 +742,7 @@ describe Kitchen::Driver::Vagrant do
         before do
           allow(transport).to receive(:name).and_return("WinRM")
           allow(driver).to receive(:run_command)
-            .with("vagrant winrm-config", any_args).and_return(output)
+            .with("cloudstack winrm-config", any_args).and_return(output)
         end
 
         it "sets :hostname from winrm-config" do
@@ -760,7 +760,7 @@ describe Kitchen::Driver::Vagrant do
         it "sets :username from winrm-config" do
           cmd
 
-          expect(state).to include(username: "vagrant")
+          expect(state).to include(username: "cloudstack")
         end
 
         it "sets :password from winrm-config" do
@@ -781,7 +781,7 @@ describe Kitchen::Driver::Vagrant do
       cmd
 
       expect(logged_output.string).to match(
-        /I, .+ INFO -- : Vagrant instance \<suitey-fooos-99\> created\.$/
+        /I, .+ INFO -- : cloudstack instance \<suitey-fooos-99\> created\.$/
       )
     end
   end
@@ -790,9 +790,9 @@ describe Kitchen::Driver::Vagrant do
 
     let(:cmd) { driver.destroy(state) }
 
-    let(:vagrant_root) do
+    let(:cloudstack_root) do
       File.join(%W{
-        #{@dir} .kitchen kitchen-vagrant suitey-fooos-99
+        #{@dir} .kitchen kitchen-cloudstack suitey-fooos-99
       })
     end
 
@@ -801,9 +801,9 @@ describe Kitchen::Driver::Vagrant do
       config[:kitchen_root] = @dir
 
       allow(driver).to receive(:run_command).and_return("")
-      with_modern_vagrant
+      with_modern_cloudstack
 
-      FileUtils.mkdir_p(vagrant_root)
+      FileUtils.mkdir_p(cloudstack_root)
       state[:hostname] = "hosta"
     end
 
@@ -811,30 +811,30 @@ describe Kitchen::Driver::Vagrant do
       FileUtils.remove_entry_secure(@dir)
     end
 
-    it "logs a message on debug level for creating the Vagrantfile" do
+    it "logs a message on debug level for creating the cloudstackfile" do
       cmd
 
       expect(logged_output.string).to match(
-        /^D, .+ DEBUG -- : Creating Vagrantfile for \<suitey-fooos-99\> /
+        /^D, .+ DEBUG -- : Creating cloudstackfile for \<suitey-fooos-99\> /
       )
     end
 
-    it "logs the Vagrantfile contents on debug level" do
+    it "logs the cloudstackfile contents on debug level" do
       cmd
 
       expect(debug_lines).to match(Regexp.new(<<-REGEXP.gsub(/^ {8}/, "")))
         ------------
-        Vagrant.configure\("2"\) do \|c\|
+        cloudstack.configure\("2"\) do \|c\|
         .*
         end
         ------------
       REGEXP
     end
 
-    it "does not run vagrant destroy if :hostname is not present in state" do
+    it "does not run cloudstack destroy if :hostname is not present in state" do
       state.delete(:hostname)
       expect(driver).to_not receive(:run_command)
-        .with("vagrant destroy -f", any_args)
+        .with("cloudstack destroy -f", any_args)
 
       cmd
     end
@@ -847,24 +847,24 @@ describe Kitchen::Driver::Vagrant do
       cmd
     end
 
-    it "runs vagrant destroy" do
+    it "runs cloudstack destroy" do
       expect(driver).to receive(:run_command)
-        .with("vagrant destroy -f", any_args)
+        .with("cloudstack destroy -f", any_args)
 
       cmd
     end
 
-    it "deletes the vagrant root directory" do
-      expect(File.directory?(vagrant_root)).to eq(true)
+    it "deletes the cloudstack root directory" do
+      expect(File.directory?(cloudstack_root)).to eq(true)
       cmd
-      expect(File.directory?(vagrant_root)).to eq(false)
+      expect(File.directory?(cloudstack_root)).to eq(false)
     end
 
     it "logs a message on info level" do
       cmd
 
       expect(logged_output.string).to match(
-        /I, .+ INFO -- : Vagrant instance \<suitey-fooos-99\> destroyed\.$/
+        /I, .+ INFO -- : cloudstack instance \<suitey-fooos-99\> destroyed\.$/
       )
     end
 
@@ -875,13 +875,13 @@ describe Kitchen::Driver::Vagrant do
     end
   end
 
-  describe "Vagrantfile" do
+  describe "cloudstackfile" do
 
     let(:cmd) { driver.create(state) }
 
-    let(:vagrant_root) do
+    let(:cloudstack_root) do
       File.join(%W{
-        #{@dir} .kitchen kitchen-vagrant suitey-fooos-99
+        #{@dir} .kitchen kitchen-cloudstack suitey-fooos-99
       })
     end
 
@@ -890,19 +890,19 @@ describe Kitchen::Driver::Vagrant do
       config[:kitchen_root] = @dir
 
       allow(driver).to receive(:run_command).and_return("")
-      with_modern_vagrant
+      with_modern_cloudstack
     end
 
     after do
       FileUtils.remove_entry_secure(@dir)
     end
 
-    it "disables the vagrant-berkshelf plugin is present" do
+    it "disables the cloudstack-berkshelf plugin is present" do
       cmd
 
-      expect(vagrantfile).to match(regexify(
+      expect(cloudstackfile).to match(regexify(
         "c.berkshelf.enabled = false " \
-        "if Vagrant.has_plugin?(\"vagrant-berkshelf\")"
+        "if cloudstack.has_plugin?(\"cloudstack-berkshelf\")"
       ))
     end
 
@@ -910,41 +910,41 @@ describe Kitchen::Driver::Vagrant do
       config[:cachier] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.cache.scope}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.cache.scope}, :partial))
     end
 
     it "sets cache.scope to :box if :cachier is set" do
       config[:cachier] = true
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.cache.scope = :box}))
+      expect(cloudstackfile).to match(regexify(%{c.cache.scope = :box}))
     end
 
     it "sets cache.scope if :cachier is set to a custom value" do
       config[:cachier] = ":machine"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.cache.scope = :machine}))
+      expect(cloudstackfile).to match(regexify(%{c.cache.scope = :machine}))
     end
 
     it "sets the vm.box" do
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.vm.box = "fooos-99"}))
+      expect(cloudstackfile).to match(regexify(%{c.vm.box = "fooos-99"}))
     end
 
     it "sets the vm.hostname" do
       config[:vm_hostname] = "charlie"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.vm.hostname = "charlie"}))
+      expect(cloudstackfile).to match(regexify(%{c.vm.hostname = "charlie"}))
     end
 
-    it "disables the /vagrant synced folder by default" do
+    it "disables the /cloudstack synced folder by default" do
       cmd
 
-      expect(vagrantfile).to match(regexify(
-        %{c.vm.synced_folder ".", "/vagrant", disabled: true}
+      expect(cloudstackfile).to match(regexify(
+        %{c.vm.synced_folder ".", "/cloudstack", disabled: true}
       ))
     end
 
@@ -952,23 +952,23 @@ describe Kitchen::Driver::Vagrant do
       config[:provider] = "wowza"
       cmd
 
-      expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
+      expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
         c.vm.provider :wowza do |p|
         end
       RUBY
     end
 
-    it "requires no Vagrantfiles by default" do
+    it "requires no cloudstackfiles by default" do
       cmd
 
-      expect(vagrantfile).to_not match(regexify("require"))
+      expect(cloudstackfile).to_not match(regexify("require"))
     end
 
     it "requires each entry in :vagranfiles" do
-      config[:vagrantfiles] = %w{/a /b /c}
+      config[:cloudstackfiles] = %w{/a /b /c}
       cmd
 
-      expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+      expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
         load "/a"
         load "/b"
         load "/c"
@@ -979,42 +979,42 @@ describe Kitchen::Driver::Vagrant do
       config[:box_url] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.vm.box_url}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.vm.box_url}, :partial))
     end
 
     it "sets vm.box_url if :box_url is set" do
       config[:box_url] = "dat.url"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.vm.box_url = "dat.url"}))
+      expect(cloudstackfile).to match(regexify(%{c.vm.box_url = "dat.url"}))
     end
 
     it "sets no vm.box_version if missing" do
       config[:box_version] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.vm.box_version}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.vm.box_version}, :partial))
     end
 
     it "sets vm.box_version if :box_version is set" do
       config[:box_version] = "a.b.c"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.vm.box_version = "a.b.c"}))
+      expect(cloudstackfile).to match(regexify(%{c.vm.box_version = "a.b.c"}))
     end
 
     it "sets no vm.boot_timeout if missing" do
       config[:boot_timeout] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.vm.boot_timeout}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.vm.boot_timeout}, :partial))
     end
 
     it "sets no vm.boot_timeout if :boot_timeout is set" do
       config[:boot_timeout] = 600
       cmd
 
-      expect(vagrantfile).to match(
+      expect(cloudstackfile).to match(
         regexify(%{c.vm.boot_timeout = 600}, :partial)
       )
     end
@@ -1023,7 +1023,7 @@ describe Kitchen::Driver::Vagrant do
       config[:box_check_update] = nil
       cmd
 
-      expect(vagrantfile).to_not match(
+      expect(cloudstackfile).to_not match(
         regexify(%{c.vm.box_check_update}, :partial)
       )
     end
@@ -1032,14 +1032,14 @@ describe Kitchen::Driver::Vagrant do
       config[:box_check_update] = false
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.vm.box_check_update = false}))
+      expect(cloudstackfile).to match(regexify(%{c.vm.box_check_update = false}))
     end
 
     it "sets no vm.box_download_insecure if missing" do
       config[:box_download_insecure] = nil
       cmd
 
-      expect(vagrantfile).to_not match(
+      expect(cloudstackfile).to_not match(
         regexify(%{c.vm.box_download_insecure}, :partial)
       )
     end
@@ -1051,7 +1051,7 @@ describe Kitchen::Driver::Vagrant do
             cmd
 
             expect(
-              vagrantfile
+              cloudstackfile
             ).to match(regexify(%{c.vm.box_download_insecure = "false"}))
           end
 
@@ -1060,7 +1060,7 @@ describe Kitchen::Driver::Vagrant do
       cmd
 
       expect(
-        vagrantfile
+        cloudstackfile
       ).to match(regexify(%{c.vm.box_download_insecure = "um"}))
     end
 
@@ -1068,56 +1068,56 @@ describe Kitchen::Driver::Vagrant do
       config[:communicator] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.vm.communicator}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.vm.communicator}, :partial))
     end
 
     it "sets vm.communicator if :communicator is set" do
       config[:communicator] = "wat"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.vm.communicator = "wat"}))
+      expect(cloudstackfile).to match(regexify(%{c.vm.communicator = "wat"}))
     end
 
     it "sets no vm.guest if missing" do
       config[:guest] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.vm.guest}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.vm.guest}, :partial))
     end
 
     it "sets vm.guest if :guest is set" do
       config[:guest] = "mac"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.vm.guest = "mac"}))
+      expect(cloudstackfile).to match(regexify(%{c.vm.guest = "mac"}))
     end
 
     it "sets no ssh.username if missing" do
       config[:username] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.ssh.username}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.ssh.username}, :partial))
     end
 
     it "sets ssh.username if :username is set" do
       config[:username] = "jdoe"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.ssh.username = "jdoe"}))
+      expect(cloudstackfile).to match(regexify(%{c.ssh.username = "jdoe"}))
     end
 
     it "sets no ssh.password if missing" do
       config[:password] = nil
       cmd
 
-      expect(vagrantfile).to_not match(regexify(%{c.ssh.password}, :partial))
+      expect(cloudstackfile).to_not match(regexify(%{c.ssh.password}, :partial))
     end
 
     it "sets ssh.password if :password is set" do
       config[:password] = "okay"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.ssh.password = "okay"}))
+      expect(cloudstackfile).to match(regexify(%{c.ssh.password = "okay"}))
     end
 
     it "sets communicator.username if :communicator and :username are set" do
@@ -1125,7 +1125,7 @@ describe Kitchen::Driver::Vagrant do
       config[:username] = "jdoe"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.wat.username = "jdoe"}))
+      expect(cloudstackfile).to match(regexify(%{c.wat.username = "jdoe"}))
     end
 
     it "sets communicator.password if :communicator and :password are set" do
@@ -1133,14 +1133,14 @@ describe Kitchen::Driver::Vagrant do
       config[:password] = "okay"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.wat.password = "okay"}))
+      expect(cloudstackfile).to match(regexify(%{c.wat.password = "okay"}))
     end
 
     it "sets no ssh.private_key_path if missing" do
       config[:ssh_key] = nil
       cmd
 
-      expect(vagrantfile).to_not match(
+      expect(cloudstackfile).to_not match(
         regexify(%{c.ssh.private_key_path}, :partial)
       )
     end
@@ -1149,7 +1149,7 @@ describe Kitchen::Driver::Vagrant do
       config[:ssh_key] = "okay"
       cmd
 
-      expect(vagrantfile).to match(regexify(%{c.ssh.private_key_path = "okay"}))
+      expect(cloudstackfile).to match(regexify(%{c.ssh.private_key_path = "okay"}))
     end
 
     it "adds a vm.ssh line for each key/value pair in :ssh" do
@@ -1161,7 +1161,7 @@ describe Kitchen::Driver::Vagrant do
       }
       cmd
 
-      expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
+      expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
         c.ssh.username = "jdoe"
         c.ssh.password = "secret"
         c.ssh.private_key_path = "/key"
@@ -1176,7 +1176,7 @@ describe Kitchen::Driver::Vagrant do
       ]
       cmd
 
-      expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
+      expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
         c.vm.network(:forwarded_port, :guest=>80, :host=>8080)
         c.vm.network(:private_network, :ip=>"192.168.33.33")
       RUBY
@@ -1189,7 +1189,7 @@ describe Kitchen::Driver::Vagrant do
       ]
       cmd
 
-      expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
+      expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
         c.vm.synced_folder "/a/b", "/opt/instance_data", nil
         c.vm.synced_folder "/host_path", "/vm_path", create: true, type: :nfs
       RUBY
@@ -1202,7 +1202,7 @@ describe Kitchen::Driver::Vagrant do
       ]
       cmd
 
-      expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
+      expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {6}/, "").chomp))
         c.vm.synced_folder "/a/b", "C:\\\\opt\\\\instance_data", nil
         c.vm.synced_folder "Z:\\\\host_path", "/vm_path", create: true
       RUBY
@@ -1215,7 +1215,7 @@ describe Kitchen::Driver::Vagrant do
       it "sets :name for virtualbox GUI" do
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.customize ["modifyvm", :id, "--audio", "none"]
@@ -1226,7 +1226,7 @@ describe Kitchen::Driver::Vagrant do
       it "disables audio by default" do
         cmd
 
-        expect(vagrantfile).to include(%{p.customize ["modifyvm", :id, "--audio", "none"]})
+        expect(cloudstackfile).to include(%{p.customize ["modifyvm", :id, "--audio", "none"]})
       end
 
       it "allows audio to be enabled with :customize" do
@@ -1235,8 +1235,8 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to include(%{p.customize ["modifyvm", :id, "--audio", "pulse"]})
-        expect(vagrantfile).not_to include(%{p.customize ["modifyvm", :id, "--audio", "none"]})
+        expect(cloudstackfile).to include(%{p.customize ["modifyvm", :id, "--audio", "pulse"]})
+        expect(cloudstackfile).not_to include(%{p.customize ["modifyvm", :id, "--audio", "none"]})
       end
 
       it "adds a line for each element in :customize" do
@@ -1246,7 +1246,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.customize ["modifyvm", :id, "--audio", "none"]
@@ -1260,14 +1260,14 @@ describe Kitchen::Driver::Vagrant do
         config[:gui] = nil
         cmd
 
-        expect(vagrantfile).to_not match(regexify(%{p.gui = }, :partial))
+        expect(cloudstackfile).to_not match(regexify(%{p.gui = }, :partial))
       end
 
       it "sets :gui to false if set" do
         config[:gui] = false
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.gui = false
@@ -1280,7 +1280,7 @@ describe Kitchen::Driver::Vagrant do
         config[:gui] = true
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.gui = true
@@ -1293,7 +1293,7 @@ describe Kitchen::Driver::Vagrant do
         config[:linked_clone] = nil
         cmd
 
-        expect(vagrantfile).to_not match(
+        expect(cloudstackfile).to_not match(
           regexify(%{p.linked_clone = }, :partial)
         )
       end
@@ -1302,7 +1302,7 @@ describe Kitchen::Driver::Vagrant do
         config[:linked_clone] = false
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.linked_clone = false
@@ -1315,7 +1315,7 @@ describe Kitchen::Driver::Vagrant do
         config[:linked_clone] = true
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.linked_clone = true
@@ -1333,11 +1333,11 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
+        expect(cloudstackfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
           unless File.file?("./d1.vmdk")
         RUBY
 
-        expect(vagrantfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
+        expect(cloudstackfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
           p.customize ["createhd", "--filename", "./d1.vmdk", "--size", 10240]
         RUBY
       end
@@ -1357,19 +1357,19 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
+        expect(cloudstackfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
           unless File.file?("./d1.vmdk")
         RUBY
 
-        expect(vagrantfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
+        expect(cloudstackfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
           p.customize ["createhd", "--filename", "./d1.vmdk", "--size", 10240]
         RUBY
 
-        expect(vagrantfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
+        expect(cloudstackfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
           unless File.file?("./d2.vmdk")
         RUBY
 
-        expect(vagrantfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
+        expect(cloudstackfile).to include(<<-RUBY.gsub(/^ {8}/, "").chomp)
           p.customize ["createhd", "--filename", "./d2.vmdk", "--size", 20480]
         RUBY
       end
@@ -1385,7 +1385,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.customize ["modifyvm", :id, "--audio", "none"]
@@ -1410,7 +1410,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.customize ["modifyvm", :id, "--audio", "none"]
@@ -1429,7 +1429,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.customize ["modifyvm", :id, "--audio", "none"]
@@ -1459,7 +1459,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.customize ["modifyvm", :id, "--audio", "none"]
@@ -1475,7 +1475,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(Regexp.new(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :virtualbox do |p|
             p.name = "kitchen-#{File.basename(config[:kitchen_root])}-suitey-fooos-99-.*"
             p.customize ["modifyvm", :id, "--audio", "none"]
@@ -1496,7 +1496,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :parallels do |p|
             p.customize ["set", :id, "--a-key", "some value"]
             p.customize ["set", :id, "--something", "else"]
@@ -1511,7 +1511,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :parallels do |p|
             p.memory = 2048
             p.cpus = 4
@@ -1523,7 +1523,7 @@ describe Kitchen::Driver::Vagrant do
         config[:linked_clone] = nil
         cmd
 
-        expect(vagrantfile).to_not match(
+        expect(cloudstackfile).to_not match(
           regexify(%{p.linked_clone = }, :partial)
         )
       end
@@ -1532,7 +1532,7 @@ describe Kitchen::Driver::Vagrant do
         config[:linked_clone] = false
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :parallels do |p|
             p.linked_clone = false
           end
@@ -1543,7 +1543,7 @@ describe Kitchen::Driver::Vagrant do
         config[:linked_clone] = true
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :parallels do |p|
             p.linked_clone = true
           end
@@ -1562,7 +1562,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :rackspace do |p|
             p.a_key = "some value"
             p.something = "else"
@@ -1584,7 +1584,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :softlayer do |p|
             p.disk_capacity = {:"0"=>25, :"2"=>100}
           end
@@ -1598,7 +1598,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :softlayer do |p|
             p.a_key = "some value"
             p.something = "else"
@@ -1619,7 +1619,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :libvirt do |p|
             p.a_key = "some value"
             p.something = "else"
@@ -1634,7 +1634,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :libvirt do |p|
             p.storage :file, :size => '32G'
           end
@@ -1651,7 +1651,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :libvirt do |p|
             p.storage :file, :size => '1G'
             p.storage :file, :size => '128G', :bus => 'sata'
@@ -1671,7 +1671,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :lxc do |p|
             p.container_name = :machine
           end
@@ -1684,7 +1684,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :lxc do |p|
             p.container_name = "beans"
           end
@@ -1697,7 +1697,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :lxc do |p|
             p.backingstore = "lvm"
           end
@@ -1713,7 +1713,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :lxc do |p|
             p.backingstore_option "--vgname", "schroots"
             p.backingstore_option "--fstype", "xfs"
@@ -1728,7 +1728,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :lxc do |p|
             p.customize "cookies", "cream"
             p.customize "salt", "vinegar"
@@ -1745,14 +1745,14 @@ describe Kitchen::Driver::Vagrant do
         config[:gui] = nil
         cmd
 
-        expect(vagrantfile).to_not match(regexify(%{p.gui = }, :partial))
+        expect(cloudstackfile).to_not match(regexify(%{p.gui = }, :partial))
       end
 
       it "sets :gui to false if set" do
         config[:gui] = false
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :vmware_desktop do |p|
             p.gui = false
           end
@@ -1763,7 +1763,7 @@ describe Kitchen::Driver::Vagrant do
         config[:gui] = true
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :vmware_desktop do |p|
             p.gui = true
           end
@@ -1777,7 +1777,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :vmware_desktop do |p|
             p.vmx["a_key"] = "some value"
             p.vmx["something"] = "else"
@@ -1791,7 +1791,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :vmware_desktop do |p|
             p.vmx["memsize"] = "222"
           end
@@ -1805,7 +1805,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :vmware_desktop do |p|
             p.vmx["memsize"] = "444"
           end
@@ -1818,7 +1818,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :vmware_desktop do |p|
             p.vmx["numvcpus"] = "2"
           end
@@ -1832,7 +1832,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :vmware_desktop do |p|
             p.vmx["numvcpus"] = "4"
           end
@@ -1850,7 +1850,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :managed do |p|
             p.server = "my_server"
           end
@@ -1864,7 +1864,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :managed do |p|
           end
         RUBY
@@ -1883,7 +1883,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :openstack do |p|
             p.key1 = "some string value"
             p.key2 = 22
@@ -1904,7 +1904,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :cloudstack do |p|
             p.a_key = "some value"
             p.something = "else"
@@ -1942,7 +1942,7 @@ describe Kitchen::Driver::Vagrant do
           end
         RUBY
 
-        expect(vagrantfile).to match(regexify(expectation))
+        expect(cloudstackfile).to match(regexify(expectation))
       end
 
       it "builds an array for security group ids in :customize" do
@@ -1959,7 +1959,7 @@ describe Kitchen::Driver::Vagrant do
           end
         RUBY
 
-        expect(vagrantfile).to match(regexify(expectation))
+        expect(cloudstackfile).to match(regexify(expectation))
       end
 
       it "builds an array for security group names in :customize" do
@@ -1976,7 +1976,7 @@ describe Kitchen::Driver::Vagrant do
           end
         RUBY
 
-        expect(vagrantfile).to match(regexify(expectation))
+        expect(cloudstackfile).to match(regexify(expectation))
       end
 
       it "builds an array of hashes for security groups in :customize" do
@@ -1984,7 +1984,7 @@ describe Kitchen::Driver::Vagrant do
           security_groups: [
             {
               name: "Awesome_security_group",
-              description: "Created from the Vagrantfile",
+              description: "Created from the cloudstackfile",
               rules: [
                 {
                   type: "ingress",
@@ -2009,7 +2009,7 @@ describe Kitchen::Driver::Vagrant do
         expectation = <<-RUBY.gsub(/^ {8}/, "").gsub(/,\n     /, ",").chomp
           c.vm.provider :cloudstack do |p|
             p.security_groups = [{:name=>"Awesome_security_group",
-              :description=>"Created from the Vagrantfile",
+              :description=>"Created from the cloudstackfile",
               :rules=>[{:type=>"ingress", :protocol=>"TCP", :startport=>22,
               :endport=>22, :cidrlist=>"0.0.0.0/0"}, {:type=>"egress",
               :protocol=>"TCP", :startport=>81, :endport=>82,
@@ -2017,7 +2017,7 @@ describe Kitchen::Driver::Vagrant do
           end
         RUBY
 
-        expect(vagrantfile).to match(regexify(expectation))
+        expect(cloudstackfile).to match(regexify(expectation))
       end
 
       it "builds an array of hashes for static nat in :customize" do
@@ -2026,7 +2026,7 @@ describe Kitchen::Driver::Vagrant do
         }
         cmd
 
-        expect(vagrantfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
+        expect(cloudstackfile).to match(regexify(<<-RUBY.gsub(/^ {8}/, "").chomp))
           c.vm.provider :cloudstack do |p|
             p.static_nat = [{:idaddress=>"A.A.A.A"}]
           end
@@ -2063,7 +2063,7 @@ describe Kitchen::Driver::Vagrant do
           end
         RUBY
 
-        expect(vagrantfile).to match(regexify(expectation))
+        expect(cloudstackfile).to match(regexify(expectation))
       end
     end
   end
@@ -2074,17 +2074,17 @@ describe Kitchen::Driver::Vagrant do
       .select { |l| l =~ regex }.map { |l| l.sub(regex, "") }.join
   end
 
-  def with_modern_vagrant
-    with_vagrant("2.4.1")
+  def with_modern_cloudstack
+    with_cloudstack("2.4.1")
   end
 
-  def with_unsupported_vagrant
-    with_vagrant("1.0.5")
+  def with_unsupported_cloudstack
+    with_cloudstack("1.0.5")
   end
 
-  def with_vagrant(version)
+  def with_cloudstack(version)
     allow(driver_object).to receive(:run_command)
-      .with("vagrant --version", any_args).and_return("Vagrant #{version}")
+      .with("cloudstack --version", any_args).and_return("cloudstack #{version}")
   end
 
   def regexify(str, line = :whole_line)
@@ -2093,7 +2093,7 @@ describe Kitchen::Driver::Vagrant do
     Regexp.new(r)
   end
 
-  def vagrantfile
-    IO.read(File.join(vagrant_root, "Vagrantfile"))
+  def cloudstackfile
+    IO.read(File.join(cloudstack_root, "cloudstackfile"))
   end
 end
