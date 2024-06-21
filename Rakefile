@@ -15,7 +15,13 @@ task :stats do
   sh 'countloc -r lib'
 end
 
+require "rspec/core/rake_task"
+desc "Run all specs in spec directory"
+RSpec::Core::RakeTask.new(:test) do |t|
+  t.pattern = "spec/**/*_spec.rb"
+end
+
 desc 'Run all quality tasks'
 task :quality => [:cane, :tailor, :stats]
 
-task :default => [:quality]
+task :default => [:quality, :test]
