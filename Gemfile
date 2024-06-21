@@ -7,8 +7,6 @@ group :test do
   gem "rake"
   gem "kitchen-inspec"
   gem "rspec", "~> 3.2"
-  gem 'cane', '~> 3'
-  gem 'tailor', '~> 1'
   gem 'countloc'
 end
 
@@ -17,5 +15,5 @@ group :debug do
 end
 
 group :chefstyle do
-  gem "chefstyle", "2.2.3"
+  gem "chefstyle"
 end
