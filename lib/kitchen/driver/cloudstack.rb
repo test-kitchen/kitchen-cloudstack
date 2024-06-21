@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 #
 # Author:: Jeff Moody (<fifthecho@gmail.com>)
 #
@@ -16,12 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'benchmark' unless defined?(Benchmark)
-require 'kitchen'
-require 'fog/cloudstack'
-require 'socket' unless defined?(Socket)
-require 'openssl' unless defined?(OpenSSL)
-require 'base64' unless defined?(Base64)
+require "benchmark" unless defined?(Benchmark)
+require "kitchen"
+require "fog/cloudstack"
+require "socket" unless defined?(Socket)
+require "openssl" unless defined?(OpenSSL)
+require "base64" unless defined?(Base64)
 
 module Kitchen
   module Driver
@@ -30,22 +29,22 @@ module Kitchen
     # @author Jeff Moody <fifthecho@gmail.com>
     class Cloudstack < Kitchen::Driver::SSHBase
       default_config :name,             nil
-      default_config :username,         'root'
-      default_config :port,             '22'
+      default_config :username,         "root"
+      default_config :port,             "22"
       default_config :password,         nil
       default_config :cloudstack_create_firewall_rule, false
 
       def compute
-        cloudstack_uri =  URI.parse(config[:cloudstack_api_url])
-        connection = Fog::Compute.new(
-          :provider => :cloudstack,
-          :cloudstack_api_key => config[:cloudstack_api_key],
-          :cloudstack_secret_access_key => config[:cloudstack_secret_key],
-          :cloudstack_host => cloudstack_uri.host,
-          :cloudstack_port => cloudstack_uri.port,
-          :cloudstack_path => cloudstack_uri.path,
-          :cloudstack_project_id => config[:cloudstack_project_id],
-          :cloudstack_scheme => cloudstack_uri.scheme
+        cloudstack_uri = URI.parse(config[:cloudstack_api_url])
+        Fog::Compute.new(
+          provider: :cloudstack,
+          cloudstack_api_key: config[:cloudstack_api_key],
+          cloudstack_secret_access_key: config[:cloudstack_secret_key],
+          cloudstack_host: cloudstack_uri.host,
+          cloudstack_port: cloudstack_uri.port,
+          cloudstack_path: cloudstack_uri.path,
+          cloudstack_project_id: config[:cloudstack_project_id],
+          cloudstack_scheme: cloudstack_uri.scheme
         )
       end
 
@@ -54,17 +53,17 @@ module Kitchen
 
         config[:server_name] ||= generate_name(instance.name)
 
-        options['displayname'] = config[:server_name]
-        options['networkids']  = config[:cloudstack_network_id]
-        options['securitygroupids'] = config[:cloudstack_security_group_id]
-        options['affinitygroupids'] = config[:cloudstack_affinity_group_id]
-        options['keypair'] = config[:cloudstack_ssh_keypair_name]
-        options['diskofferingid'] = config[:cloudstack_diskoffering_id]
-        options['size'] = config[:cloudstack_diskoffering_size]
-        options['name'] = config[:host_name]
-        options['details[0].cpuNumber'] = config[:cloudstack_serviceoffering_cpu]
-        options['details[0].cpuSpeed'] = config[:cloudstack_serviceoffering_cpuspeed]
-        options['details[0].memory'] = config[:cloudstack_serviceoffering_memory]
+        options["displayname"] = config[:server_name]
+        options["networkids"]  = config[:cloudstack_network_id]
+        options["securitygroupids"] = config[:cloudstack_security_group_id]
+        options["affinitygroupids"] = config[:cloudstack_affinity_group_id]
+        options["keypair"] = config[:cloudstack_ssh_keypair_name]
+        options["diskofferingid"] = config[:cloudstack_diskoffering_id]
+        options["size"] = config[:cloudstack_diskoffering_size]
+        options["name"] = config[:host_name]
+        options["details[0].cpuNumber"] = config[:cloudstack_serviceoffering_cpu]
+        options["details[0].cpuSpeed"] = config[:cloudstack_serviceoffering_cpuspeed]
+        options["details[0].memory"] = config[:cloudstack_serviceoffering_memory]
         options[:userdata] = convert_userdata(config[:cloudstack_userdata]) if config[:cloudstack_userdata]
 
         options = sanitize(options)
@@ -78,22 +77,22 @@ module Kitchen
       end
 
       def create(state)
-        if not config[:name]
+        unless config[:name]
           # Generate what should be a unique server name
           config[:name] = "#{instance.name}-#{Etc.getlogin}-" +
-            "#{Socket.gethostname}-#{Array.new(8){rand(36).to_s(36)}.join}"
+            "#{Socket.gethostname}-#{Array.new(8) { rand(36).to_s(36) }.join}"
         end
         if config[:disable_ssl_validation]
-          require 'excon' unless defined?(Excon)
+          require "excon" unless defined?(Excon)
           Excon.defaults[:ssl_verify_peer] = false
         end
 
         server = create_server
         debug(server)
 
-        state[:server_id] = server['deployvirtualmachineresponse'].fetch('id')
+        state[:server_id] = server["deployvirtualmachineresponse"].fetch("id")
         start_jobid = {
-          'jobid' => server['deployvirtualmachineresponse'].fetch('jobid')
+          "jobid" => server["deployvirtualmachineresponse"].fetch("jobid"),
         }
         info("CloudStack instance <#{state[:server_id]}> created.")
         debug("Job ID #{start_jobid}")
@@ -104,7 +103,7 @@ module Kitchen
 
         server_start = compute.query_async_job_result(jobid)
         # jobstatus of zero is a running job
-        while server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+        while server_start["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
           debug("Job status: #{server_start}")
           print ". "
           sleep(10)
@@ -117,10 +116,10 @@ module Kitchen
         debug("Server_Start: #{server_start} \n")
 
         # jobstatus of 2 is an error response
-        if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 2
-          errortext = server_start['queryasyncjobresultresponse']
-            .fetch('jobresult')
-            .fetch('errortext')
+        if server_start["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 2
+          errortext = server_start["queryasyncjobresultresponse"]
+            .fetch("jobresult")
+            .fetch("errortext")
 
           error("ERROR! Job failed with #{errortext}")
 
@@ -128,13 +127,13 @@ module Kitchen
         end
 
         # jobstatus of 1 is a succesfully completed async job
-        if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
-          server_info = server_start['queryasyncjobresultresponse']['jobresult']['virtualmachine']
+        if server_start["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 1
+          server_info = server_start["queryasyncjobresultresponse"]["jobresult"]["virtualmachine"]
           debug(server_info)
           print "(server ready)"
 
           keypair = nil
-          if config[:keypair_search_directory] and File.exist?(
+          if config[:keypair_search_directory] && File.exist?(
             "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
           )
             keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
@@ -148,7 +147,7 @@ module Kitchen
           elsif File.exist?("#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem")
             keypair = "#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem"
             debug("Keypair being used is #{keypair}")
-          elsif (!config[:cloudstack_ssh_keypair_name].nil?)
+          elsif !config[:cloudstack_ssh_keypair_name].nil?
             info("Keypair specified but not found. Using password if enabled.")
           end
 
@@ -156,7 +155,7 @@ module Kitchen
             info("Associating public ip...")
             state[:hostname] = associate_public_ip(state, server_info)
             info("Creating port forward...")
-            create_port_forward(state, server_info['id'])
+            create_port_forward(state, server_info["id"])
           else
             state[:hostname] = default_public_ip(server_info) unless config[:associate_public_ip]
           end
@@ -165,33 +164,33 @@ module Kitchen
             debug("Using keypair: #{keypair}")
             info("SSH for #{state[:hostname]} with keypair #{config[:cloudstack_ssh_keypair_name]}.")
             ssh_key = File.read(keypair)
-            if ssh_key.split[0] == "ssh-rsa" or ssh_key.split[0] == "ssh-dsa"
+            if (ssh_key.split[0] == "ssh-rsa") || (ssh_key.split[0] == "ssh-dsa")
               error("SSH key #{keypair} is not a Private Key. Please modify your .kitchen.yml")
             end
 
-            wait_for_sshd(state[:hostname], config[:username], {:keys => keypair})
+            wait_for_sshd(state[:hostname], config[:username], { keys: keypair })
             debug("SSH connectivity validated with keypair.")
 
-            ssh = Fog::SSH.new(state[:hostname], config[:username], {:keys => keypair})
+            ssh = Fog::SSH.new(state[:hostname], config[:username], { keys: keypair })
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using keypair #{keypair}.")
-          elsif server_info.fetch('passwordenabled')
-            password = server_info.fetch('password')
+          elsif server_info.fetch("passwordenabled")
+            password = server_info.fetch("password")
             config[:password] = password
             # Print out IP and password so you can record it if you want.
             info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
 
-            wait_for_sshd(state[:hostname], config[:username], {:password => password})
+            wait_for_sshd(state[:hostname], config[:username], { password: })
             debug("SSH connectivity validated with cloudstack-set password.")
 
-            ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => password})
+            ssh = Fog::SSH.new(state[:hostname], config[:username], { password: })
             debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
           elsif config[:password]
             info("Connecting with user #{config[:username]} with password #{config[:password]}")
 
-            wait_for_sshd(state[:hostname], config[:username], {:password => config[:password]})
+            wait_for_sshd(state[:hostname], config[:username], { password: config[:password] })
             debug("SSH connectivity validated with fixed password.")
 
-            ssh = Fog::SSH.new(state[:hostname], config[:username], {:password => config[:password]})
+            ssh = Fog::SSH.new(state[:hostname], config[:username], { password: config[:password] })
           else
             info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
           end
@@ -204,6 +203,7 @@ module Kitchen
 
       def destroy(state)
         return unless state[:server_id]
+
         if config[:associate_public_ip]
           delete_port_forward(state)
           release_public_ip(state)
@@ -219,8 +219,8 @@ module Kitchen
         if server
           compute.destroy_virtual_machine(
             {
-              'id' => state[:server_id],
-              'expunge' => expunge
+              "id" => state[:server_id],
+              "expunge" => expunge,
             }
           )
         end
@@ -259,12 +259,12 @@ module Kitchen
         false
       ensure
         sync_time = 0
-        if (config[:cloudstack_sync_time])
+        if config[:cloudstack_sync_time]
           sync_time = config[:cloudstack_sync_time]
         end
         sleep(sync_time)
         debug("Connecting to host and running ls")
-        ssh.run('ls')
+        ssh.run("ls")
       end
 
       def deploy_private_key(ssh)
@@ -280,21 +280,21 @@ module Kitchen
         if user_public_key
           ssh.run([
             %{mkdir .ssh},
-            %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys}
+            %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys},
           ])
         end
       end
 
       def generate_name(base)
         # Generate what should be a unique server name
-        sep = '-'
+        sep = "-"
         pieces = [
           base,
           Etc.getlogin,
           Socket.gethostname,
-          Array.new(8) { rand(36).to_s(36) }.join
+          Array.new(8) { rand(36).to_s(36) }.join,
         ]
-        until pieces.join(sep).length <= 64 do
+        until pieces.join(sep).length <= 64
           if pieces[2] && pieces[2].length > 24
             pieces[2] = pieces[2][0..-2]
           elsif pieces[1] && pieces[1].length > 16
@@ -313,7 +313,7 @@ module Kitchen
       end
 
       def convert_userdata(user_data)
-        if user_data.match /^(?:[A-Za-z0-9+\/]{4}\n?)*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/
+        if user_data.match(%r{^(?:[A-Za-z0-9+/]{4}\n?)*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$})
           user_data
         else
           Base64.encode64(user_data)
@@ -322,46 +322,46 @@ module Kitchen
 
       def associate_public_ip(state, server_info)
         options = {
-          'zoneid' => config[:cloudstack_zone_id],
-          'vpcid' => get_vpc_id,
-          'networkid' => config[:cloudstack_network_id]
+          "zoneid" => config[:cloudstack_zone_id],
+          "vpcid" => get_vpc_id,
+          "networkid" => config[:cloudstack_network_id],
         }
         res = compute.associate_ip_address(options)
-        job_status = compute.query_async_job_result(res['associateipaddressresponse']['jobid'])
-        if job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
+        job_status = compute.query_async_job_result(res["associateipaddressresponse"]["jobid"])
+        if job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 1
           save_ipaddress_id(state, job_status)
-          ip_address = get_public_ip(res['associateipaddressresponse']['id'])
+          ip_address = get_public_ip(res["associateipaddressresponse"]["id"])
         else
-          error(job_status['queryasyncjobresultresponse'].fetch('jobresult'))
+          error(job_status["queryasyncjobresultresponse"].fetch("jobresult"))
         end
 
         if config[:cloudstack_create_firewall_rule]
           info("Creating firewall rule for SSH")
           # create firewallrule projectid=<project> cidrlist=<0.0.0.0/0 or your source> protocol=tcp startport=0 endport=65535 (or you can restrict to 22 if you want) ipaddressid=<public ip address id>
           options = {
-            'projectid' => config[:cloudstack_project_id],
-            'cidrlist' => '0.0.0.0/0',
-            'protocol' => 'tcp',
-            'startport' => 22,
-            'endport' => 22,
-            'ipaddressid' => state[:ipaddressid]
+            "projectid" => config[:cloudstack_project_id],
+            "cidrlist" => "0.0.0.0/0",
+            "protocol" => "tcp",
+            "startport" => 22,
+            "endport" => 22,
+            "ipaddressid" => state[:ipaddressid],
           }
           res = compute.create_firewall_rule(options)
           status = 0
           timeout = 10
           while status == 0
-            job_status = compute.query_async_job_result(res['createfirewallruleresponse']['jobid'])
-            status = job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i
+            job_status = compute.query_async_job_result(res["createfirewallruleresponse"]["jobid"])
+            status = job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i
             timeout -= 1
             error("Failed to create firewall rule by timeout") if timeout == 0
             sleep 1
           end
 
-          if job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
+          if job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 1
             save_firewall_rule_id(state, job_status)
-            info('Firewall rule successfully created')
+            info("Firewall rule successfully created")
           else
-            error(job_status['queryasyncjobresultresponse'])
+            error(job_status["queryasyncjobresultresponse"])
           end
         end
 
@@ -370,20 +370,20 @@ module Kitchen
 
       def create_port_forward(state, virtualmachineid)
         options = {
-          'ipaddressid' => state[:ipaddressid],
-          'privateport' => 22,
-          'protocol' => "TCP",
-          'publicport' => 22,
-          'virtualmachineid' => virtualmachineid,
-          'networkid' => config[:cloudstack_network_id],
-          'openfirewall' => false
+          "ipaddressid" => state[:ipaddressid],
+          "privateport" => 22,
+          "protocol" => "TCP",
+          "publicport" => 22,
+          "virtualmachineid" => virtualmachineid,
+          "networkid" => config[:cloudstack_network_id],
+          "openfirewall" => false,
         }
         res = compute.create_port_forwarding_rule(options)
-        job_status = compute.query_async_job_result(res['createportforwardingruleresponse']['jobid'])
-        unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+        job_status = compute.query_async_job_result(res["createportforwardingruleresponse"]["jobid"])
+        unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
           error("Error creating port forwarding rules")
         end
-        save_forwarding_port_rule_id(state, res['createportforwardingruleresponse']['id'])
+        save_forwarding_port_rule_id(state, res["createportforwardingruleresponse"]["id"])
       end
 
       def release_public_ip(state)
@@ -393,8 +393,8 @@ module Kitchen
         rescue Fog::Compute::Cloudstack::BadRequest => e
           error(e) unless e.to_s.match?(/does not exist/)
         else
-          job_status = compute.query_async_job_result(res['disassociateipaddressresponse']['jobid'])
-          unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+          job_status = compute.query_async_job_result(res["disassociateipaddressresponse"]["jobid"])
+          unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
             error("Error disassociating public ip")
           end
         end
@@ -407,8 +407,8 @@ module Kitchen
           rescue Fog::Compute::Cloudstack::BadRequest => e
             error(e) unless e.to_s.match?(/does not exist/)
           else
-            job_status = compute.query_async_job_result(res['deletefirewallruleresponse']['jobid'])
-            unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+            job_status = compute.query_async_job_result(res["deletefirewallruleresponse"]["jobid"])
+            unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
               error("Error removing firewall rule '#{state[:firewall_rule_id]}'")
             end
           end
@@ -422,36 +422,36 @@ module Kitchen
         rescue Fog::Compute::Cloudstack::BadRequest => e
           error(e) unless e.to_s.match?(/does not exist/)
         else
-          job_status = compute.query_async_job_result(res['deleteportforwardingruleresponse']['jobid'])
-          unless job_status['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 0
+          job_status = compute.query_async_job_result(res["deleteportforwardingruleresponse"]["jobid"])
+          unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
             error("Error deleting port forwarding rules")
           end
         end
       end
 
       def get_vpc_id
-        compute.list_networks['listnetworksresponse']['network']
-          .select{|e| e['id'] == config[:cloudstack_network_id]}.first['vpcid']
+        compute.list_networks["listnetworksresponse"]["network"]
+          .select { |e| e["id"] == config[:cloudstack_network_id] }.first["vpcid"]
       end
 
       def get_public_ip(public_ip_uuid)
-        compute.list_public_ip_addresses['listpublicipaddressesresponse']['publicipaddress']
-          .select{|e| e['id'] == public_ip_uuid}
-          .first['ipaddress']
+        compute.list_public_ip_addresses["listpublicipaddressesresponse"]["publicipaddress"]
+          .select { |e| e["id"] == public_ip_uuid }
+          .first["ipaddress"]
       end
 
       def save_ipaddress_id(state, job_status)
-        state[:ipaddressid] = job_status['queryasyncjobresultresponse']
-                                .fetch('jobresult')
-                                .fetch('ipaddress')
-                                .fetch('id')
+        state[:ipaddressid] = job_status["queryasyncjobresultresponse"]
+          .fetch("jobresult")
+          .fetch("ipaddress")
+          .fetch("id")
       end
 
       def save_firewall_rule_id(state, job_status)
-        state[:firewall_rule_id] = job_status['queryasyncjobresultresponse']
-                                .fetch('jobresult')
-                                .fetch('firewallrule')
-                                .fetch('id')
+        state[:firewall_rule_id] = job_status["queryasyncjobresultresponse"]
+          .fetch("jobresult")
+          .fetch("firewallrule")
+          .fetch("id")
       end
 
       def save_forwarding_port_rule_id(state, uuid)
@@ -459,7 +459,7 @@ module Kitchen
       end
 
       def default_public_ip(server_info)
-        config[:cloudstack_vm_public_ip] || server_info.fetch('nic').first.fetch('ipaddress')
+        config[:cloudstack_vm_public_ip] || server_info.fetch("nic").first.fetch("ipaddress")
       end
     end
   end
