@@ -1,28 +1,26 @@
-# coding: utf-8
-lib = File.expand_path('../lib', __FILE__)
+lib = File.expand_path("lib", __dir__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'kitchen/driver/cloudstack_version'
+require "kitchen/driver/cloudstack_version"
 
 Gem::Specification.new do |spec|
-  spec.name          = 'kitchen-cloudstack'
+  spec.name = "kitchen-cloudstack"
   spec.required_ruby_version = ">= 3.1"
   spec.version       = Kitchen::Driver::CLOUDSTACK_VERSION
-  spec.authors       = ['Jeff Moody']
-  spec.email         = ['fifthecho@gmail.com']
+  spec.authors       = ["Jeff Moody"]
+  spec.email         = ["fifthecho@gmail.com"]
   spec.description   = %q{A Test Kitchen Driver for Apache CloudStack}
   spec.summary       = %q{Provides an interface for Test Kitchen to be able to run jobs against an Apache CloudStack cloud.}
-  spec.homepage      = 'https://github.com/test-kitchen/kitchen-cloudstack'
-  spec.license       = 'Apache-2.0'
+  spec.homepage      = "https://github.com/test-kitchen/kitchen-cloudstack"
+  spec.license       = "Apache-2.0"
 
   spec.files         = `git ls-files`.split($/)
-  spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
-  spec.require_paths = ['lib']
+  spec.require_paths = ["lib"]
 
-  spec.add_dependency 'test-kitchen', '>= 1.0.0', "< 5"
-  spec.add_dependency 'fog-cloudstack', '~> 0.1.0'
+  spec.add_dependency "test-kitchen", ">= 1.0.0", "< 5"
+  spec.add_dependency "fog-cloudstack", "~> 0.1.0"
 
-  spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'rspec'
+  spec.add_development_dependency "rake"
+  spec.add_development_dependency "rspec"
 
-  spec.add_development_dependency 'pry'
+  spec.add_development_dependency "pry"
 end
