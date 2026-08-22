@@ -15,451 +15,184 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "benchmark" unless defined?(Benchmark)
 require "kitchen"
-require "fog/cloudstack"
-require "socket" unless defined?(Socket)
-require "openssl" unless defined?(OpenSSL)
-require "base64" unless defined?(Base64)
+require "kitchen/driver/base"
+require "time" unless defined?(Time.zone_offset)
+
+require_relative "cloudstack_version"
+require_relative "cloudstack/client"
+require_relative "cloudstack/credentials"
+require_relative "cloudstack/networking"
+require_relative "cloudstack/server_options"
 
 module Kitchen
   module Driver
-    # Cloudstack driver for Kitchen.
+    # Test Kitchen driver for Apache CloudStack and Citrix CloudPlatform.
+    #
+    # The driver's job is to create the instance, tell Test Kitchen how to
+    # reach it, and destroy it again. Talking to the instance is the
+    # transport's job, so the driver hands over credentials through instance
+    # state and lets the configured transport connect -- which is what makes
+    # a WinRM instance work as readily as an SSH one.
     #
     # @author Jeff Moody <fifthecho@gmail.com>
-    class Cloudstack < Kitchen::Driver::SSHBase
-      default_config :name,             nil
-      default_config :username,         "root"
-      default_config :port,             "22"
-      default_config :password,         nil
+    class Cloudstack < Kitchen::Driver::Base
+      kitchen_driver_api_version 2
+
+      plugin_version Kitchen::Driver::CLOUDSTACK_VERSION
+
       default_config :cloudstack_create_firewall_rule, false
+      default_config :cloudstack_expunge, false
+      default_config :associate_public_ip, false
 
-      def compute
-        cloudstack_uri = URI.parse(config[:cloudstack_api_url])
-        Fog::Compute.new(
-          provider: :cloudstack,
-          cloudstack_api_key: config[:cloudstack_api_key],
-          cloudstack_secret_access_key: config[:cloudstack_secret_key],
-          cloudstack_host: cloudstack_uri.host,
-          cloudstack_port: cloudstack_uri.port,
-          cloudstack_path: cloudstack_uri.path,
-          cloudstack_project_id: config[:cloudstack_project_id],
-          cloudstack_scheme: cloudstack_uri.scheme
-        )
-      end
+      # CloudStack instance states that mean the machine is actually up.
+      LIVE_STATES = %w{Running Starting}.freeze
 
-      def create_server
-        options = {}
+      # State this driver owns, cleared on destroy. Credentials are included
+      # so a destroyed instance leaves no password behind in the state file.
+      STATE_KEYS = %i{
+        server_id hostname ipaddressid forwardingruleid firewall_rule_id
+        username port password ssh_key
+      }.freeze
 
-        config[:server_name] ||= generate_name(instance.name)
-
-        options["displayname"] = config[:server_name]
-        options["networkids"]  = config[:cloudstack_network_id]
-        options["securitygroupids"] = config[:cloudstack_security_group_id]
-        options["affinitygroupids"] = config[:cloudstack_affinity_group_id]
-        options["keypair"] = config[:cloudstack_ssh_keypair_name]
-        options["diskofferingid"] = config[:cloudstack_diskoffering_id]
-        options["size"] = config[:cloudstack_diskoffering_size]
-        options["name"] = config[:host_name]
-        options["details[0].cpuNumber"] = config[:cloudstack_serviceoffering_cpu]
-        options["details[0].cpuSpeed"] = config[:cloudstack_serviceoffering_cpuspeed]
-        options["details[0].memory"] = config[:cloudstack_serviceoffering_memory]
-        options[:userdata] = convert_userdata(config[:cloudstack_userdata]) if config[:cloudstack_userdata]
-
-        options = sanitize(options)
-
-        options[:templateid] = config[:cloudstack_template_id]
-        options[:serviceofferingid] = config[:cloudstack_serviceoffering_id]
-        options[:zoneid] = config[:cloudstack_zone_id]
-
-        debug(options)
-        compute.deploy_virtual_machine(options)
-      end
-
+      # (see Base#create)
       def create(state)
-        unless config[:name]
-          # Generate what should be a unique server name
-          config[:name] = "#{instance.name}-#{Etc.getlogin}-" +
-            "#{Socket.gethostname}-#{Array.new(8) { rand(36).to_s(36) }.join}"
-        end
-        if config[:disable_ssl_validation]
-          require "excon" unless defined?(Excon)
-          Excon.defaults[:ssl_verify_peer] = false
-        end
+        super
+        disable_ssl_validation! if config[:disable_ssl_validation]
 
-        server = create_server
-        debug(server)
+        server_info = deploy_instance(state)
 
-        state[:server_id] = server["deployvirtualmachineresponse"].fetch("id")
-        start_jobid = {
-          "jobid" => server["deployvirtualmachineresponse"].fetch("jobid"),
-        }
-        info("CloudStack instance <#{state[:server_id]}> created.")
-        debug("Job ID #{start_jobid}")
-        # Cloning the original job id hash because running the
-        # query_async_job_result updates the hash to include
-        # more than just the job id (which I could work around, but I'm lazy).
-        jobid = start_jobid.clone
+        state[:hostname] = hostname_for(state, server_info)
+        apply_credentials(state, server_info)
 
-        server_start = compute.query_async_job_result(jobid)
-        # jobstatus of zero is a running job
-        while server_start["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
-          debug("Job status: #{server_start}")
-          print ". "
-          sleep(10)
-          debug("Running Job ID #{jobid}")
-          debug("Start Job ID #{start_jobid}")
-          # We have to reclone on each iteration, as the hash keeps getting updated.
-          jobid = start_jobid.clone
-          server_start = compute.query_async_job_result(jobid)
-        end
-        debug("Server_Start: #{server_start} \n")
-
-        # jobstatus of 2 is an error response
-        if server_start["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 2
-          errortext = server_start["queryasyncjobresultresponse"]
-            .fetch("jobresult")
-            .fetch("errortext")
-
-          error("ERROR! Job failed with #{errortext}")
-
-          raise ActionFailed, "Could not create server #{errortext}"
-        end
-
-        # jobstatus of 1 is a successfully completed async job
-        if server_start["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 1
-          server_info = server_start["queryasyncjobresultresponse"]["jobresult"]["virtualmachine"]
-          debug(server_info)
-          print "(server ready)"
-
-          keypair = nil
-          if config[:keypair_search_directory] && File.exist?(
-            "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
-          )
-            keypair = "#{config[:keypair_search_directory]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
-            debug("Keypair being used is #{keypair}")
-          elsif File.exist?("./#{config[:cloudstack_ssh_keypair_name]}.pem")
-            keypair = "./#{config[:cloudstack_ssh_keypair_name]}.pem"
-            debug("Keypair being used is #{keypair}")
-          elsif File.exist?("#{ENV["HOME"]}/#{config[:cloudstack_ssh_keypair_name]}.pem")
-            keypair = "#{ENV["HOME"]}/#{config[:cloudstack_ssh_keypair_name]}.pem"
-            debug("Keypair being used is #{keypair}")
-          elsif File.exist?("#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem")
-            keypair = "#{ENV["HOME"]}/.ssh/#{config[:cloudstack_ssh_keypair_name]}.pem"
-            debug("Keypair being used is #{keypair}")
-          elsif !config[:cloudstack_ssh_keypair_name].nil?
-            info("Keypair specified but not found. Using password if enabled.")
-          end
-
-          if config[:associate_public_ip]
-            info("Associating public ip...")
-            state[:hostname] = associate_public_ip(state, server_info)
-            info("Creating port forward...")
-            create_port_forward(state, server_info["id"])
-          else
-            state[:hostname] = default_public_ip(server_info) unless config[:associate_public_ip]
-          end
-
-          if keypair
-            debug("Using keypair: #{keypair}")
-            info("SSH for #{state[:hostname]} with keypair #{config[:cloudstack_ssh_keypair_name]}.")
-            ssh_key = File.read(keypair)
-            if ssh_key.split[0] == "ssh-rsa" || ssh_key.split[0] == "ssh-dsa"
-              error("SSH key #{keypair} is not a Private Key. Please modify your .kitchen.yml")
-            end
-
-            wait_for_sshd(state[:hostname], config[:username], { keys: keypair })
-            debug("SSH connectivity validated with keypair.")
-
-            ssh = Fog::SSH.new(state[:hostname], config[:username], { keys: keypair })
-            debug("Connecting to : #{state[:hostname]} as #{config[:username]} using keypair #{keypair}.")
-          elsif server_info.fetch("passwordenabled")
-            password = server_info.fetch("password")
-            config[:password] = password
-            # Print out IP and password so you can record it if you want.
-            info("Password for #{config[:username]} at #{state[:hostname]} is #{password}")
-
-            wait_for_sshd(state[:hostname], config[:username], { password: password })
-            debug("SSH connectivity validated with cloudstack-set password.")
-
-            ssh = Fog::SSH.new(state[:hostname], config[:username], { password: password })
-            debug("Connecting to : #{state[:hostname]} as #{config[:username]} using password #{password}.")
-          elsif config[:password]
-            info("Connecting with user #{config[:username]} with password #{config[:password]}")
-
-            wait_for_sshd(state[:hostname], config[:username], { password: config[:password] })
-            debug("SSH connectivity validated with fixed password.")
-
-            ssh = Fog::SSH.new(state[:hostname], config[:username], { password: config[:password] })
-          else
-            info("No keypair specified (or file not found) nor is this a password enabled template. You will have to manually copy your SSH public key to #{state[:hostname]} to use this Kitchen.")
-          end
-
-          validate_ssh_connectivity(ssh)
-
-          deploy_private_key(ssh)
-        end
+        wait_for_guest_password_sync
+        instance.transport.connection(state).wait_until_ready
       end
 
+      # (see Base#destroy)
       def destroy(state)
         return unless state[:server_id]
 
-        if config[:associate_public_ip]
-          delete_port_forward(state)
-          release_public_ip(state)
-        end
-        debug("Destroying #{state[:server_id]}")
-        server = compute.servers.get(state[:server_id])
-        expunge =
-          if !!config[:cloudstack_expunge] == config[:cloudstack_expunge]
-            config[:cloudstack_expunge]
-          else
-            false
-          end
-        if server
-          compute.destroy_virtual_machine(
-            {
-              "id" => state[:server_id],
-              "expunge" => expunge,
-            }
-          )
-        end
+        networking.teardown(state) if config[:associate_public_ip]
+
+        client.compute.destroy_virtual_machine(
+          "id" => state[:server_id],
+          "expunge" => !!config[:cloudstack_expunge]
+        )
         info("CloudStack instance <#{state[:server_id]}> destroyed.")
-        state.delete(:server_id)
-        state.delete(:hostname)
+
+        STATE_KEYS.each { |key| state.delete(key) }
       end
 
-      def validate_ssh_connectivity(ssh)
-      rescue Errno::ETIMEDOUT
-        debug("SSH connection timed out. Retrying.")
-        sleep 2
-        false
-      rescue Errno::EPERM
-        debug("SSH connection returned error. Retrying.")
-        false
-      rescue Errno::ECONNREFUSED
-        debug("SSH connection returned connection refused. Retrying.")
-        sleep 2
-        false
-      rescue Errno::EHOSTUNREACH
-        debug("SSH connection returned host unreachable. Retrying.")
-        sleep 2
-        false
-      rescue Errno::ENETUNREACH
-        debug("SSH connection returned network unreachable. Retrying.")
-        sleep 30
-        false
-      rescue Net::SSH::Disconnect
-        debug("SSH connection has been disconnected. Retrying.")
-        sleep 15
-        false
-      rescue Net::SSH::AuthenticationFailed
-        debug("SSH authentication has failed. Password or Keys may not be in place yet. Retrying.")
-        sleep 15
-        false
-      ensure
-        sync_time = 0
-        if config[:cloudstack_sync_time]
-          sync_time = config[:cloudstack_sync_time]
-        end
-        sleep(sync_time)
-        debug("Connecting to host and running ls")
-        ssh.run("ls")
+      # (see Base#status)
+      def status(state)
+        return super unless state[:server_id]
+
+        instance_state = lookup_instance_state(state[:server_id])
+        return super unless instance_state
+
+        {
+          live: LIVE_STATES.include?(instance_state),
+          state: instance_state,
+          source: "driver",
+          resource_id: state[:server_id],
+          message: "CloudStack reports the instance as #{instance_state}",
+          checked_at: Time.now.utc.iso8601,
+        }
       end
 
-      def deploy_private_key(ssh)
-        debug("Deploying user private key to server using connection #{ssh} to guarantee connectivity.")
-        if File.exist?("#{ENV["HOME"]}/.ssh/id_rsa.pub")
-          user_public_key = File.read("#{ENV["HOME"]}/.ssh/id_rsa.pub")
-        elsif File.exist?("#{ENV["HOME"]}/.ssh/id_dsa.pub")
-          user_public_key = File.read("#{ENV["HOME"]}/.ssh/id_dsa.pub")
-        else
-          debug("No public SSH key for user. Skipping.")
-        end
-
-        if user_public_key
-          ssh.run([
-            %{mkdir .ssh},
-            %{echo "#{user_public_key}" >> ~/.ssh/authorized_keys},
-          ])
-        end
-      end
-
-      def generate_name(base)
-        # Generate what should be a unique server name
-        sep = "-"
-        pieces = [
-          base,
-          Etc.getlogin,
-          Socket.gethostname,
-          Array.new(8) { rand(36).to_s(36) }.join,
-        ]
-        until pieces.join(sep).length <= 64
-          if pieces[2] && pieces[2].length > 24
-            pieces[2] = pieces[2][0..-2]
-          elsif pieces[1] && pieces[1].length > 16
-            pieces[1] = pieces[1][0..-2]
-          elsif pieces[0] && pieces[0].length > 16
-            pieces[0] = pieces[0][0..-2]
-          end
-        end
-        pieces.join sep
+      # The CloudStack API connection, exposed so it can be substituted.
+      #
+      # @return [Client]
+      def client
+        @client ||= Client.new(config)
       end
 
       private
 
-      def sanitize(options)
-        options.reject { |k, v| v.nil? }
+      # Deploys the instance and waits for CloudStack to finish building it.
+      #
+      # @return [Hash] the "virtualmachine" payload describing the instance
+      def deploy_instance(state)
+        options = ServerOptions.new(config, instance_name: instance.name).to_h
+        debug("Deploying CloudStack instance with #{options}")
+
+        response = client.compute.deploy_virtual_machine(options)
+          .fetch("deployvirtualmachineresponse")
+
+        state[:server_id] = response.fetch("id")
+        info("CloudStack instance <#{state[:server_id]}> created.")
+
+        client.run_job(response.fetch("jobid")).fetch("virtualmachine")
       end
 
-      def convert_userdata(user_data)
-        if user_data.match(%r{^(?:[A-Za-z0-9+/]{4}\n?)*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$})
-          user_data
+      # Works out the address Test Kitchen should connect to, allocating a
+      # public address and forwarding the transport's port when asked to.
+      def hostname_for(state, server_info)
+        unless config[:associate_public_ip]
+          return config[:cloudstack_vm_public_ip] ||
+              server_info.fetch("nic").first.fetch("ipaddress")
+        end
+
+        info("Associating public IP address...")
+        address = networking.associate_public_ip(state)
+
+        info("Forwarding port #{transport_port} to the instance...")
+        networking.create_port_forward(state, server_info.fetch("id"))
+
+        address
+      end
+
+      # Credentials go into state because the transport merges state over its
+      # own config, so this is how a driver tells the transport how to log in.
+      def apply_credentials(state, server_info)
+        credentials = Credentials.new(config)
+        state.merge!(credentials.to_state(server_info))
+        credentials.warnings.each { |warning| warn(warning) }
+
+        if state[:ssh_key]
+          info("Connecting to #{state[:hostname]} with keypair #{state[:ssh_key]}")
+        elsif state[:password]
+          info("Connecting to #{state[:hostname]} with a password")
         else
-          Base64.encode64(user_data)
+          warn("No keypair or password is available for #{state[:hostname]}. " \
+            "You may need to copy your public key to the instance yourself.")
         end
       end
 
-      def associate_public_ip(state, server_info)
-        options = {
-          "zoneid" => config[:cloudstack_zone_id],
-          "vpcid" => get_vpc_id,
-          "networkid" => config[:cloudstack_network_id],
-        }
-        res = compute.associate_ip_address(options)
-        job_status = compute.query_async_job_result(res["associateipaddressresponse"]["jobid"])
-        if job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 1
-          save_ipaddress_id(state, job_status)
-          ip_address = get_public_ip(res["associateipaddressresponse"]["id"])
-        else
-          error(job_status["queryasyncjobresultresponse"].fetch("jobresult"))
-        end
+      # CloudStack's cloud-set-guest-password and SSH key injection can land
+      # after the network is up, so allow configuring a settling period.
+      def wait_for_guest_password_sync
+        sync_time = config[:cloudstack_sync_time]
+        return unless sync_time
 
-        if config[:cloudstack_create_firewall_rule]
-          info("Creating firewall rule for SSH")
-          # create firewallrule projectid=<project> cidrlist=<0.0.0.0/0 or your source> protocol=tcp startport=0 endport=65535 (or you can restrict to 22 if you want) ipaddressid=<public ip address id>
-          options = {
-            "projectid" => config[:cloudstack_project_id],
-            "cidrlist" => "0.0.0.0/0",
-            "protocol" => "tcp",
-            "startport" => 22,
-            "endport" => 22,
-            "ipaddressid" => state[:ipaddressid],
-          }
-          res = compute.create_firewall_rule(options)
-          status = 0
-          timeout = 10
-          while status == 0
-            job_status = compute.query_async_job_result(res["createfirewallruleresponse"]["jobid"])
-            status = job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i
-            timeout -= 1
-            error("Failed to create firewall rule by timeout") if timeout == 0
-            sleep 1
-          end
-
-          if job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 1
-            save_firewall_rule_id(state, job_status)
-            info("Firewall rule successfully created")
-          else
-            error(job_status["queryasyncjobresultresponse"])
-          end
-        end
-
-        ip_address
+        debug("Waiting #{sync_time}s for CloudStack to finish setting credentials")
+        sleep(sync_time)
       end
 
-      def create_port_forward(state, virtualmachineid)
-        options = {
-          "ipaddressid" => state[:ipaddressid],
-          "privateport" => 22,
-          "protocol" => "TCP",
-          "publicport" => 22,
-          "virtualmachineid" => virtualmachineid,
-          "networkid" => config[:cloudstack_network_id],
-          "openfirewall" => false,
-        }
-        res = compute.create_port_forwarding_rule(options)
-        job_status = compute.query_async_job_result(res["createportforwardingruleresponse"]["jobid"])
-        unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
-          error("Error creating port forwarding rules")
-        end
-        save_forwarding_port_rule_id(state, res["createportforwardingruleresponse"]["id"])
+      def lookup_instance_state(server_id)
+        response = client.compute.list_virtual_machines("id" => server_id)
+        machines = response.fetch("listvirtualmachinesresponse", {})["virtualmachine"]
+        return nil unless machines.is_a?(Array) && !machines.empty?
+
+        machines.first["state"]
       end
 
-      def release_public_ip(state)
-        info("Disassociating public ip...")
-        begin
-          res = compute.disassociate_ip_address(state[:ipaddressid])
-        rescue Fog::Compute::Cloudstack::BadRequest => e
-          error(e) unless e.to_s.match?(/does not exist/)
-        else
-          job_status = compute.query_async_job_result(res["disassociateipaddressresponse"]["jobid"])
-          unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
-            error("Error disassociating public ip")
-          end
-        end
-
-        if state[:firewall_rule_id]
-          info("Removing firewall rule '#{state[:firewall_rule_id]}'")
-
-          begin
-            res = compute.delete_firewall_rule(state[:firewall_rule_id])
-          rescue Fog::Compute::Cloudstack::BadRequest => e
-            error(e) unless e.to_s.match?(/does not exist/)
-          else
-            job_status = compute.query_async_job_result(res["deletefirewallruleresponse"]["jobid"])
-            unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
-              error("Error removing firewall rule '#{state[:firewall_rule_id]}'")
-            end
-          end
-        end
+      def networking
+        @networking ||= Networking.new(
+          config, client: client, port: transport_port, logger: logger
+        )
       end
 
-      def delete_port_forward(state)
-        info("Deleting port forwarding rules...")
-        begin
-          res = compute.delete_port_forwarding_rule(state[:forwardingruleid])
-        rescue Fog::Compute::Cloudstack::BadRequest => e
-          error(e) unless e.to_s.match?(/does not exist/)
-        else
-          job_status = compute.query_async_job_result(res["deleteportforwardingruleresponse"]["jobid"])
-          unless job_status["queryasyncjobresultresponse"].fetch("jobstatus").to_i == 0
-            error("Error deleting port forwarding rules")
-          end
-        end
+      # The port the configured transport connects on: 22 for SSH, 5985 or
+      # 5986 for WinRM. Port forwarding and firewall rules follow it.
+      def transport_port
+        instance.transport[:port]
       end
 
-      def get_vpc_id
-        compute.list_networks["listnetworksresponse"]["network"]
-          .select { |e| e["id"] == config[:cloudstack_network_id] }.first["vpcid"]
-      end
-
-      def get_public_ip(public_ip_uuid)
-        compute.list_public_ip_addresses["listpublicipaddressesresponse"]["publicipaddress"]
-          .select { |e| e["id"] == public_ip_uuid }
-          .first["ipaddress"]
-      end
-
-      def save_ipaddress_id(state, job_status)
-        state[:ipaddressid] = job_status["queryasyncjobresultresponse"]
-          .fetch("jobresult")
-          .fetch("ipaddress")
-          .fetch("id")
-      end
-
-      def save_firewall_rule_id(state, job_status)
-        state[:firewall_rule_id] = job_status["queryasyncjobresultresponse"]
-          .fetch("jobresult")
-          .fetch("firewallrule")
-          .fetch("id")
-      end
-
-      def save_forwarding_port_rule_id(state, uuid)
-        state[:forwardingruleid] = uuid
-      end
-
-      def default_public_ip(server_info)
-        config[:cloudstack_vm_public_ip] || server_info.fetch("nic").first.fetch("ipaddress")
+      def disable_ssl_validation!
+        require "excon" unless defined?(Excon)
+        Excon.defaults[:ssl_verify_peer] = false
       end
     end
   end

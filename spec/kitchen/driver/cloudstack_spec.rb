@@ -1,0 +1,228 @@
+require "spec_helper"
+require "kitchen/driver/cloudstack"
+require "kitchen/transport/ssh"
+require "kitchen/transport/winrm"
+require "kitchen/provisioner/dummy"
+require "kitchen/verifier/dummy"
+require "logger"
+
+RSpec.describe Kitchen::Driver::Cloudstack do
+  # Stands in for the CloudStack API, recording what the driver asked for.
+  class DriverFakeClient
+    attr_reader :compute, :calls
+
+    def initialize(vm_info:, vm_state: "Running")
+      @vm_info = vm_info
+      @vm_state = vm_state
+      @calls = []
+      @compute = Recorder.new(self)
+    end
+
+    class Recorder
+      def initialize(owner) = @owner = owner
+
+      def method_missing(name, *args)
+        @owner.calls << [name, args.first]
+        case name
+        when :deploy_virtual_machine
+          { "deployvirtualmachineresponse" => { "id" => "vm-1", "jobid" => "job-1" } }
+        when :list_virtual_machines
+          { "listvirtualmachinesresponse" => { "virtualmachine" => [{ "id" => "vm-1", "state" => @owner.vm_state }] } }
+        else
+          {}
+        end
+      end
+
+      def respond_to_missing?(_n, _p = false) = true
+    end
+
+    attr_reader :vm_state
+
+    def run_job(_jobid) = { "virtualmachine" => @vm_info }
+
+    def run_response_job(response, key)
+      @calls << [:run_response_job, key]
+      case key
+      when "associateipaddressresponse"
+        { "ipaddress" => { "id" => "ip-uuid", "ipaddress" => "203.0.113.9" } }
+      when "createfirewallruleresponse"
+        { "firewallrule" => { "id" => "fw-1" } }
+      else
+        {}
+      end
+    end
+
+    def called?(name) = calls.any? { |c| c.first == name }
+    def call_named(name) = calls.find { |c| c.first == name }&.last
+  end
+
+  let(:vm_info) do
+    { "id" => "vm-1", "nic" => [{ "ipaddress" => "10.0.0.5" }], "passwordenabled" => false }
+  end
+
+  let(:client) { DriverFakeClient.new(vm_info: vm_info) }
+  let(:transport) { Kitchen::Transport::Ssh.new }
+  let(:connection) { instance_double(Kitchen::Transport::Ssh::Connection, wait_until_ready: true) }
+
+  let(:base_config) do
+    {
+      cloudstack_api_url: "https://cs.example.com/client/api",
+      cloudstack_template_id: "tmpl-1",
+      cloudstack_serviceoffering_id: "offer-1",
+      cloudstack_zone_id: "zone-1",
+      cloudstack_job_poll_interval: 0,
+    }
+  end
+
+  def build_driver(config = {})
+    driver = described_class.new(base_config.merge(config))
+    allow(driver).to receive(:client).and_return(client)
+
+    state_file = Kitchen::StateFile.new(Dir.mktmpdir, "default-ubuntu")
+    Kitchen::Instance.new(
+      driver: driver,
+      suite: Kitchen::Suite.new(name: "default"),
+      platform: Kitchen::Platform.new(name: "ubuntu"),
+      provisioner: Kitchen::Provisioner::Dummy.new,
+      transport: transport,
+      verifier: Kitchen::Verifier::Dummy.new,
+      lifecycle_hooks: Kitchen::LifecycleHooks.new({}, state_file),
+      state_file: state_file,
+      logger: Kitchen::Logger.new(stdout: StringIO.new)
+    )
+    allow(transport).to receive(:connection).and_return(connection)
+    driver
+  end
+
+  describe "#create" do
+    it "records the created instance id in state" do
+      state = {}
+      build_driver.create(state)
+
+      expect(state[:server_id]).to eq("vm-1")
+    end
+
+    it "uses the instance's own address when no public IP is requested" do
+      state = {}
+      build_driver.create(state)
+
+      expect(state[:hostname]).to eq("10.0.0.5")
+    end
+
+    it "prefers an explicitly configured public address" do
+      state = {}
+      build_driver(cloudstack_vm_public_ip: "203.0.113.1").create(state)
+
+      expect(state[:hostname]).to eq("203.0.113.1")
+    end
+
+    it "waits for the configured transport to become ready" do
+      expect(connection).to receive(:wait_until_ready)
+
+      build_driver.create({})
+    end
+
+    it "passes the CloudStack generated password to the transport via state" do
+      vm_info["passwordenabled"] = true
+      vm_info["password"] = "generated-pw"
+      state = {}
+      build_driver.create(state)
+
+      expect(state[:password]).to eq("generated-pw")
+    end
+
+    it "does not override transport configured credentials by default" do
+      state = {}
+      build_driver.create(state)
+
+      expect(state).not_to have_key(:username)
+      expect(state).not_to have_key(:port)
+    end
+
+    it "raises rather than continuing when the deploy job fails" do
+      driver = build_driver
+      allow(client).to receive(:run_job).and_raise(Kitchen::ActionFailed, "Insufficient capacity")
+
+      expect { driver.create({}) }.to raise_error(Kitchen::ActionFailed, /Insufficient capacity/)
+    end
+  end
+
+  describe "#destroy" do
+    it "destroys the CloudStack instance" do
+      build_driver.destroy(server_id: "vm-1")
+
+      expect(client.call_named(:destroy_virtual_machine)["id"]).to eq("vm-1")
+    end
+
+    it "honours the expunge setting" do
+      build_driver(cloudstack_expunge: true).destroy(server_id: "vm-1")
+
+      expect(client.call_named(:destroy_virtual_machine)["expunge"]).to be(true)
+    end
+
+    it "clears the instance details from state" do
+      state = { server_id: "vm-1", hostname: "10.0.0.5" }
+      build_driver.destroy(state)
+
+      expect(state).not_to have_key(:server_id)
+      expect(state).not_to have_key(:hostname)
+    end
+
+    it "clears the credentials it put into state" do
+      state = { server_id: "vm-1", hostname: "10.0.0.5", password: "s3cret", ssh_key: "/tmp/k.pem" }
+      build_driver.destroy(state)
+
+      expect(state).not_to have_key(:password)
+      expect(state).not_to have_key(:ssh_key)
+    end
+
+    it "does nothing when there is no instance recorded" do
+      build_driver.destroy({})
+
+      expect(client.called?(:destroy_virtual_machine)).to be(false)
+    end
+  end
+
+  describe "#status" do
+    it "reports a running instance as live" do
+      status = build_driver.status(server_id: "vm-1")
+
+      expect(status[:live]).to be(true)
+      expect(status[:state]).to eq("Running")
+    end
+
+    it "reports a stopped instance as not live" do
+      client = DriverFakeClient.new(vm_info: vm_info, vm_state: "Stopped")
+      driver = described_class.new(base_config)
+      allow(driver).to receive(:client).and_return(client)
+
+      expect(driver.status(server_id: "vm-1")[:live]).to be(false)
+    end
+
+    it "reports an unknown state when no instance has been created" do
+      expect(build_driver.status({})[:state]).to eq("unknown")
+    end
+  end
+
+  describe "transport awareness" do
+    context "with a WinRM transport" do
+      let(:transport) { Kitchen::Transport::Winrm.new }
+
+      it "forwards the WinRM port instead of SSH" do
+        state = {}
+        build_driver(associate_public_ip: true).create(state)
+
+        expect(client.call_named(:create_port_forwarding_rule)["publicport"]).to eq(5985)
+      end
+    end
+
+    context "with an SSH transport" do
+      it "forwards the SSH port" do
+        state = {}
+        build_driver(associate_public_ip: true).create(state)
+
+        expect(client.call_named(:create_port_forwarding_rule)["publicport"]).to eq(22)
+      end
+    end
+  end
+end
