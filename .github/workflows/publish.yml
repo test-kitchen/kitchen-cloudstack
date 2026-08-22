@@ -1,0 +1,46 @@
+---
+name: release-please
+
+"on":
+  push:
+    branches: [main]
+
+# Least privilege. release-please itself authenticates with
+# PORTER_GITHUB_TOKEN; these permissions cover the GITHUB_TOKEN handed to
+# the GitHub Packages publish step.
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+    steps:
+      # Actions are pinned to commit SHAs rather than tags or branches so a
+      # moved tag cannot change what runs with the publishing credentials.
+      # Renovate keeps the pins current.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5
+        id: release
+        with:
+          token: ${{ secrets.PORTER_GITHUB_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        if: ${{ steps.release.outputs.release_created }}
+
+      - name: Build and publish to GitHub Package
+        uses: actionshub/publish-gem-to-github@86eb0ce1ced1072298bf68776a32a5c9703ad9aa  # main
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          owner: ${{ secrets.OWNER }}
+
+      - name: Build and publish to RubyGems
+        uses: actionshub/publish-gem-to-rubygems@f9126f7a2d36a4fd31a13e78fde5fbdcc4b7b251  # main
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          token: ${{ secrets.RUBYGEMS_API_KEY }}
