@@ -21,11 +21,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'test-kitchen', '>= 1.0.0', "< 5"
   spec.add_dependency 'fog-cloudstack', '~> 0.1.0'
 
-  spec.add_development_dependency 'bundler'
   spec.add_development_dependency 'rake'
+  spec.add_development_dependency 'rspec'
 
-  spec.add_development_dependency 'cane', '~> 3'
-  spec.add_development_dependency 'tailor', '~> 1'
-  spec.add_development_dependency 'countloc'
   spec.add_development_dependency 'pry'
 end
