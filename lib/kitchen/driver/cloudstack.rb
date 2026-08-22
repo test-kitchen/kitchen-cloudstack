@@ -127,7 +127,7 @@ module Kitchen
           raise ActionFailed, "Could not create server #{errortext}"
         end
 
-        # jobstatus of 1 is a succesfully completed async job
+        # jobstatus of 1 is a successfully completed async job
         if server_start['queryasyncjobresultresponse'].fetch('jobstatus').to_i == 1
           server_info = server_start['queryasyncjobresultresponse']['jobresult']['virtualmachine']
           debug(server_info)
