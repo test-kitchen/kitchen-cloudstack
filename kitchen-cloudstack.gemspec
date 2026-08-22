@@ -5,6 +5,7 @@ require 'kitchen/driver/cloudstack_version'
 
 Gem::Specification.new do |spec|
   spec.name          = 'kitchen-cloudstack'
+  spec.required_ruby_version = ">= 3.1"
   spec.version       = Kitchen::Driver::CLOUDSTACK_VERSION
   spec.authors       = ['Jeff Moody']
   spec.email         = ['fifthecho@gmail.com']
