@@ -1,5 +1,7 @@
 # kitchen-cloudstack
 
+[![Gem Version](https://badge.fury.io/rb/kitchen-cloudstack.svg)](https://badge.fury.io/rb/kitchen-cloudstack)
+
 A [Test Kitchen](https://kitchen.ci/) driver for [Apache CloudStack](https://cloudstack.apache.org/) and Citrix CloudPlatform. It deploys and destroys CloudStack virtual machines so you can test your cookbooks and infrastructure code against them.
 
 > **Compatibility warning**

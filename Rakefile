@@ -1,21 +1,18 @@
-require 'bundler/gem_tasks'
-require 'cane/rake_task'
-require 'tailor/rake_task'
+require "bundler/gem_tasks"
+require "rspec/core/rake_task"
 
-desc 'Run cane to check quality metrics'
-Cane::RakeTask.new do |cane|
-  cane.canefile = './.cane'
+RSpec::Core::RakeTask.new(:test) do |t|
+  t.pattern = "spec/**/*_spec.rb"
 end
 
-Tailor::RakeTask.new
-
-desc 'Display LOC stats'
-task :stats do
-  puts "\n## Production Code Stats"
-  sh 'countloc -r lib'
+begin
+  require "cookstyle/chefstyle"
+  require "rubocop/rake_task"
+  RuboCop::RakeTask.new(:style) do |task|
+    task.options << "--display-cop-names"
+  end
+rescue LoadError
+  puts "cookstyle/chefstyle is not available. (sudo) gem install cookstyle to do style checking."
 end
 
-desc 'Run all quality tasks'
-task :quality => [:cane, :tailor, :stats]
-
-task :default => [:quality]
+task default: %i{test}
