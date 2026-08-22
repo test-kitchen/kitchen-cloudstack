@@ -13,8 +13,16 @@ Gem::Specification.new do |spec|
   spec.homepage      = "https://github.com/test-kitchen/kitchen-cloudstack"
   spec.license       = "Apache-2.0"
 
-  spec.files         = `git ls-files`.split($/)
+  spec.files         = `git ls-files`.split($/).grep(/LICENSE|^lib/)
   spec.require_paths = ["lib"]
+
+  spec.metadata = {
+    "bug_tracker_uri" => "#{spec.homepage}/issues",
+    "changelog_uri" => "#{spec.homepage}/blob/main/CHANGELOG.md",
+    "documentation_uri" => "#{spec.homepage}/blob/main/README.md",
+    "source_code_uri" => spec.homepage,
+    "rubygems_mfa_required" => "true",
+  }
 
   spec.add_dependency "test-kitchen", ">= 3.0", "< 5"
   spec.add_dependency "fog-cloudstack", "~> 0.1.0"
