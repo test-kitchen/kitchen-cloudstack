@@ -1,5 +1,17 @@
 # kitchen-cloudstack Changelog
 
+## [1.0.0](https://github.com/test-kitchen/kitchen-cloudstack/compare/v0.24.0...v1.0.0) (2026-08-22)
+
+
+### Bug Fixes
+
+* bump tk dep to allow tk 4 ([#41](https://github.com/test-kitchen/kitchen-cloudstack/issues/41)) ([82383d0](https://github.com/test-kitchen/kitchen-cloudstack/commit/82383d08437662da3c6a6573b2fbaff8b47aba3c))
+
+
+### Continuous Integration
+
+* add release-please automation and cut 1.0.0 ([#47](https://github.com/test-kitchen/kitchen-cloudstack/issues/47)) ([fabac36](https://github.com/test-kitchen/kitchen-cloudstack/commit/fabac36aa2029adec217502498b28daf08a80958))
+
 ## 1.0.0
 
 ### Modern Test Kitchen support
