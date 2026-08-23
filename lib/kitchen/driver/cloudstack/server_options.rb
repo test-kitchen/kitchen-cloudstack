@@ -56,6 +56,12 @@ module Kitchen
           @hostname = hostname
         end
 
+        # Builds the parameter hash for deployVirtualMachine.
+        #
+        # Optional parameters whose config value is nil are dropped, so
+        # CloudStack applies its own defaults rather than receiving nils.
+        #
+        # @return [Hash] parameters ready to pass to the API
         def to_h
           params = { "displayname" => display_name }
 
@@ -72,6 +78,9 @@ module Kitchen
           params
         end
 
+        # The instance's display name.
+        #
+        # @return [String] the configured +server_name+, or a generated one
         def display_name
           config[:server_name] || generate_name
         end
@@ -108,6 +117,12 @@ module Kitchen
           parts
         end
 
+        # The user data to send, base64 encoded.
+        #
+        # Data that is already valid base64 is passed through untouched rather
+        # than being encoded a second time.
+        #
+        # @return [String] base64-encoded user data
         def userdata
           data = config[:cloudstack_userdata]
           data.match(BASE64_PATTERN) ? data : Base64.encode64(data)

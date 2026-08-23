@@ -26,6 +26,7 @@ require_relative "cloudstack/networking"
 require_relative "cloudstack/server_options"
 
 module Kitchen
+  # Test Kitchen's driver plugins.
   module Driver
     # Test Kitchen driver for Apache CloudStack and Citrix CloudPlatform.
     #
@@ -55,7 +56,11 @@ module Kitchen
         username port password ssh_key
       }.freeze
 
-      # (see Base#create)
+      # Deploys the instance and waits until it can be logged into.
+      #
+      # @param state [Hash] mutable instance state; gains +server_id+,
+      #   +hostname+, and whichever credential keys apply
+      # @return [void]
       def create(state)
         super
         disable_ssl_validation! if config[:disable_ssl_validation]
@@ -69,7 +74,14 @@ module Kitchen
         instance.transport.connection(state).wait_until_ready
       end
 
-      # (see Base#destroy)
+      # Destroys the instance and releases anything allocated alongside it.
+      #
+      # Public addresses, port forwards, and firewall rules are torn down
+      # first, then every key this driver owns is cleared from state so a
+      # destroyed instance leaves no password behind in the state file.
+      #
+      # @param state [Hash] instance state naming the instance
+      # @return [void]
       def destroy(state)
         return unless state[:server_id]
 
@@ -84,7 +96,11 @@ module Kitchen
         STATE_KEYS.each { |key| state.delete(key) }
       end
 
-      # (see Base#status)
+      # Reports what CloudStack currently thinks of the instance.
+      #
+      # @param state [Hash] instance state naming the instance
+      # @return [Hash] a Test Kitchen status hash, or the base implementation's
+      #   answer when there is no instance or CloudStack does not know it
       def status(state)
         return super unless state[:server_id]
 
@@ -170,6 +186,11 @@ module Kitchen
         sleep(sync_time)
       end
 
+      # Asks CloudStack for one instance's current state.
+      #
+      # @param server_id [String] the instance's CloudStack id
+      # @return [String, nil] e.g. +"Running"+, or nil when CloudStack returns
+      #   no matching machine
       def lookup_instance_state(server_id)
         response = client.compute.list_virtual_machines("id" => server_id)
         machines = response.fetch("listvirtualmachinesresponse", {})["virtualmachine"]
@@ -178,6 +199,9 @@ module Kitchen
         machines.first["state"]
       end
 
+      # Helper that owns the optional public address and its firewall rules.
+      #
+      # @return [Networking]
       def networking
         @networking ||= Networking.new(
           config, client: client, port: transport_port, logger: logger
@@ -190,6 +214,12 @@ module Kitchen
         instance.transport[:port]
       end
 
+      # Turns off TLS certificate verification for every Excon request.
+      #
+      # This is process-wide, not scoped to this driver, which is why it is
+      # only done when +disable_ssl_validation+ is explicitly set.
+      #
+      # @return [void]
       def disable_ssl_validation!
         require "excon" unless defined?(Excon)
         Excon.defaults[:ssl_verify_peer] = false
