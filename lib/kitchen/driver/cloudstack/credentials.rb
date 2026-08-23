@@ -53,6 +53,14 @@ module Kitchen
 
         attr_reader :config, :home, :working_dir
 
+        # Picks the single credential the transport should use.
+        #
+        # Sources are tried in {SOURCES} order and the first that resolves
+        # wins, so a keypair beats a CloudStack-generated password, which in
+        # turn beats a password from config.
+        #
+        # @param server_info [Hash] the "virtualmachine" payload
+        # @return [Hash] one of +{ssh_key:}+, +{password:}+, or +{}+
         def credential_state(server_info)
           if keypair_path
             { ssh_key: keypair_path }
@@ -65,6 +73,10 @@ module Kitchen
           end
         end
 
+        # The password CloudStack generated for a password-enabled template.
+        #
+        # @param server_info [Hash] the "virtualmachine" payload
+        # @return [String, nil] nil unless the template is password-enabled
         def generated_password(server_info)
           return nil unless server_info["passwordenabled"]
 
@@ -79,6 +91,12 @@ module Kitchen
           @keypair_path = find_keypair
         end
 
+        # Locates the local .pem matching the configured keypair name.
+        #
+        # A missing file is a warning rather than an error, because a password
+        # may still get the user in.
+        #
+        # @return [String, nil] path to the key, or nil if none was found
         def find_keypair
           name = config[:cloudstack_ssh_keypair_name]
           return nil if name.nil?
@@ -96,10 +114,21 @@ module Kitchen
           path
         end
 
+        # Directories searched for a keypair's .pem, in order.
+        #
+        # @return [Array<String>] the configured directory, the working
+        #   directory, the home directory, then ~/.ssh
         def search_directories
           [config[:keypair_search_directory], working_dir, home, File.join(home.to_s, ".ssh")].compact
         end
 
+        # Warns when the located .pem is a public key.
+        #
+        # Exporting the wrong half of a keypair is a common mistake, and the
+        # resulting authentication failure is otherwise hard to read.
+        #
+        # @param path [String] the key file to inspect
+        # @return [void]
         def warn_unless_private_key(path)
           first_token = File.read(path).split.first
           return unless PUBLIC_KEY_PREFIXES.include?(first_token)

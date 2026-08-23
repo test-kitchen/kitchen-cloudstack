@@ -82,8 +82,13 @@ module Kitchen
 
         attr_reader :config, :client, :port, :logger
 
+        # @return [Fog::Compute] the shared CloudStack connection
         def compute = client.compute
 
+        # Opens the transport's port on the allocated public address.
+        #
+        # @param state [Hash] mutable instance state; gains +firewall_rule_id+
+        # @return [void]
         def create_firewall_rule(state)
           response = compute.create_firewall_rule(
             "projectid" => config[:cloudstack_project_id],
@@ -98,6 +103,10 @@ module Kitchen
           state[:firewall_rule_id] = rule["id"] if rule.is_a?(Hash)
         end
 
+        # Removes the port forwarding rule, tolerating one already gone.
+        #
+        # @param state [Hash] instance state naming the rule
+        # @return [void]
         def delete_port_forward(state)
           tolerating_missing("port forwarding rule") do
             response = compute.delete_port_forwarding_rule(state[:forwardingruleid])
@@ -105,6 +114,10 @@ module Kitchen
           end
         end
 
+        # Removes the firewall rule, tolerating one already gone.
+        #
+        # @param state [Hash] instance state naming the rule
+        # @return [void]
         def delete_firewall_rule(state)
           tolerating_missing("firewall rule") do
             response = compute.delete_firewall_rule(state[:firewall_rule_id])
@@ -112,6 +125,10 @@ module Kitchen
           end
         end
 
+        # Disassociates the public address, tolerating one already gone.
+        #
+        # @param state [Hash] instance state naming the address
+        # @return [void]
         def release_public_ip(state)
           tolerating_missing("public IP address") do
             response = compute.disassociate_ip_address(state[:ipaddressid])

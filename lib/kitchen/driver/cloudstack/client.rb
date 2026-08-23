@@ -25,12 +25,22 @@ module Kitchen
       # rather than a result, so callers use {#run_job} to turn that job id
       # into the eventual result, or into an ActionFailed.
       class Client
-        # Values CloudStack reports in an async job's "jobstatus" field.
+        # Value CloudStack reports in an async job's "jobstatus" field while
+        # the job is still running.
         JOB_RUNNING = 0
+
+        # Value CloudStack reports in "jobstatus" once the job has succeeded.
         JOB_SUCCEEDED = 1
+
+        # Value CloudStack reports in "jobstatus" once the job has failed.
         JOB_FAILED = 2
 
+        # Seconds between polls of an async job, when +cloudstack_job_poll_interval+
+        # is not configured.
         DEFAULT_POLL_INTERVAL = 10
+
+        # Seconds to wait for an async job, when +cloudstack_job_timeout+ is
+        # not configured.
         DEFAULT_TIMEOUT = 600
 
         def initialize(config, compute: nil, sleeper: nil)
@@ -39,6 +49,12 @@ module Kitchen
           @sleeper = sleeper || ->(seconds) { sleep(seconds) }
         end
 
+        # The fog CloudStack connection, built from the configured endpoint.
+        #
+        # The API URL is split into scheme, host, port, and path because fog
+        # wants them separately rather than as one URL.
+        #
+        # @return [Fog::Compute] a CloudStack compute connection
         def compute
           @compute ||= begin
             uri = URI.parse(config[:cloudstack_api_url])
@@ -96,10 +112,12 @@ module Kitchen
 
         attr_reader :config, :sleeper
 
+        # @return [Integer] seconds between polls of a running job
         def poll_interval
           config[:cloudstack_job_poll_interval] || DEFAULT_POLL_INTERVAL
         end
 
+        # @return [Integer] seconds to wait before giving up on a job
         def timeout
           config[:cloudstack_job_timeout] || DEFAULT_TIMEOUT
         end
