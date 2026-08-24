@@ -1,5 +1,12 @@
 # kitchen-cloudstack Changelog
 
+## [1.1.0](https://github.com/test-kitchen/kitchen-cloudstack/compare/v1.0.0...v1.1.0) (2026-08-24)
+
+
+### Features
+
+* implement the driver doctor hook ([#59](https://github.com/test-kitchen/kitchen-cloudstack/issues/59)) ([bf2c7ce](https://github.com/test-kitchen/kitchen-cloudstack/commit/bf2c7cedc5fb783d77c46f3dc388c89b4a3fad48))
+
 ## [1.0.0](https://github.com/test-kitchen/kitchen-cloudstack/compare/v0.24.0...v1.0.0) (2026-08-22)
 
 ### Bug Fixes
