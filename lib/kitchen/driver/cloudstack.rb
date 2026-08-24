@@ -18,6 +18,7 @@
 require "kitchen"
 require "kitchen/driver/base"
 require "time" unless defined?(Time.zone_offset)
+require "uri" unless defined?(URI)
 
 require_relative "cloudstack_version"
 require_relative "cloudstack/client"
@@ -117,6 +118,23 @@ module Kitchen
         }
       end
 
+      # Checks the configuration for the mistakes that otherwise surface only
+      # once +create+ is already talking to CloudStack.
+      #
+      # This driver declares no +required_config+, so a missing endpoint or
+      # credential is not caught at finalize time the way it is in most
+      # drivers; it fails part way through a deploy instead. These checks move
+      # that discovery to +kitchen doctor+.
+      #
+      # @param state [Hash] mutable instance and driver state
+      # @return [Boolean] true when a problem was reported
+      def doctor(state) # rubocop:disable Lint/UnusedMethodArgument
+        problems = missing_settings_problems + endpoint_problems
+
+        problems.each { |problem| warn(problem) }
+        !problems.empty?
+      end
+
       # The CloudStack API connection, exposed so it can be substituted.
       #
       # @return [Client]
@@ -125,6 +143,47 @@ module Kitchen
       end
 
       private
+
+      # Settings the driver cannot deploy without, with the reason each one
+      # matters, reported together so one `kitchen doctor` names them all
+      # rather than one per run.
+      #
+      # @return [Array<String>] one problem per unset setting
+      def missing_settings_problems
+        {
+          cloudstack_api_url: "the API endpoint to talk to",
+          cloudstack_api_key: "the API key to authenticate with",
+          cloudstack_secret_key: "the secret key to sign requests with",
+          cloudstack_template_id: "the template to build the instance from",
+          cloudstack_serviceoffering_id: "the service offering to size it with",
+          cloudstack_zone_id: "the zone to build it in",
+        }.filter_map do |key, why|
+          "#{key} is not set: CloudStack needs #{why}." if config[key].to_s.empty?
+        end
+      end
+
+      # Confirms the endpoint parses and that CloudStack accepts the keys.
+      #
+      # Skipped when the endpoint or credentials are missing, because
+      # {#missing_settings_problems} has already said so and a second message
+      # about a failed connection would just be noise.
+      #
+      # @return [Array<String>] a connectivity problem, or an empty array
+      def endpoint_problems
+        return [] if %i{cloudstack_api_url cloudstack_api_key cloudstack_secret_key}
+          .any? { |key| config[key].to_s.empty? }
+
+        uri = URI.parse(config[:cloudstack_api_url])
+        return ["cloudstack_api_url (#{config[:cloudstack_api_url]}) has no host."] if uri.host.nil?
+
+        client.compute.list_zones
+        []
+      rescue URI::InvalidURIError => e
+        ["cloudstack_api_url (#{config[:cloudstack_api_url]}) is not a URL: #{e.message}"]
+      rescue ::StandardError => e
+        ["CloudStack rejected the configured credentials at " \
+         "#{config[:cloudstack_api_url]}: #{e.message}"]
+      end
 
       # Deploys the instance and waits for CloudStack to finish building it.
       #
