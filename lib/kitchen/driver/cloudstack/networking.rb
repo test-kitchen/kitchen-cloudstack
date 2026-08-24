@@ -29,6 +29,10 @@ module Kitchen
         # this in the message. Teardown treats it as success.
         ALREADY_GONE = /does not exist/
 
+        # @param config [Hash] the driver configuration
+        # @param client [Client] the shared CloudStack client
+        # @param port [Integer] the transport port to forward and open
+        # @param logger [#debug, nil] where already-gone resources are noted
         def initialize(config, client:, port:, logger: nil)
           @config = config
           @client = client
@@ -56,6 +60,10 @@ module Kitchen
         end
 
         # Forwards the transport's port on the public address to the instance.
+        #
+        # @param state [Hash] mutable instance state; gains +forwardingruleid+
+        # @param virtualmachine_id [String] the instance to forward to
+        # @return [void]
         def create_port_forward(state, virtualmachine_id)
           response = compute.create_port_forwarding_rule(
             "ipaddressid" => state[:ipaddressid],
@@ -72,6 +80,9 @@ module Kitchen
 
         # Removes everything {#associate_public_ip} and {#create_port_forward}
         # created, in the reverse order, tolerating resources already gone.
+        #
+        # @param state [Hash] instance state naming the resources to remove
+        # @return [void]
         def teardown(state)
           delete_port_forward(state) if state[:forwardingruleid]
           delete_firewall_rule(state) if state[:firewall_rule_id]
@@ -138,6 +149,12 @@ module Kitchen
 
         # Teardown should not fail because something is already deleted, but
         # any other API error is worth surfacing.
+        #
+        # @param description [String] names the resource, for the debug message
+        # @yield the deletion call to attempt
+        # @return [void]
+        # @raise [Fog::Cloudstack::Compute::BadRequest] for any error other
+        #   than the resource already being gone
         def tolerating_missing(description)
           yield
         rescue Fog::Cloudstack::Compute::BadRequest => e

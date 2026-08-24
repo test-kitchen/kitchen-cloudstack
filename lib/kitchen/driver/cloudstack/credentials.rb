@@ -33,6 +33,9 @@ module Kitchen
 
         attr_reader :warnings
 
+        # @param config [Hash] the driver configuration
+        # @param home [String, nil] the home directory keypair paths expand against
+        # @param working_dir [String] the directory relative keypair paths expand against
         def initialize(config, home: ENV["HOME"], working_dir: ".")
           @config = config
           @home = home
