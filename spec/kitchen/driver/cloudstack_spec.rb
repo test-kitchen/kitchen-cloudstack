@@ -9,15 +9,18 @@ require "logger"
 RSpec.describe Kitchen::Driver::Cloudstack do
   # Stands in for the CloudStack API, recording what the driver asked for.
   class DriverFakeClient
-    attr_reader :compute, :calls
+    attr_reader :api, :calls
 
     def initialize(vm_info:, vm_state: "Running")
       @vm_info = vm_info
       @vm_state = vm_state
       @calls = []
-      @compute = Recorder.new(self)
+      @api = Recorder.new(self)
     end
 
+    # cloudstack_client strips the response envelope, and every asynchronous
+    # call is made with sync: true, so each answers with CloudStack's
+    # immediate response rather than the finished job result.
     class Recorder
       def initialize(owner) = @owner = owner
 
@@ -25,11 +28,13 @@ RSpec.describe Kitchen::Driver::Cloudstack do
         @owner.calls << [name, args.first]
         case name
         when :deploy_virtual_machine
-          { "deployvirtualmachineresponse" => { "id" => "vm-1", "jobid" => "job-1" } }
+          { "id" => "vm-1", "jobid" => "job-1" }
         when :list_virtual_machines
-          { "listvirtualmachinesresponse" => { "virtualmachine" => [{ "id" => "vm-1", "state" => @owner.vm_state }] } }
+          [{ "id" => "vm-1", "state" => @owner.vm_state }]
+        when :associate_ip_address
+          { "id" => "ip-uuid", "jobid" => "job-ip" }
         else
-          {}
+          { "id" => "#{name}-id", "jobid" => "#{name}-job" }
         end
       end
 
@@ -38,17 +43,15 @@ RSpec.describe Kitchen::Driver::Cloudstack do
 
     attr_reader :vm_state
 
-    def run_job(_jobid) = { "virtualmachine" => @vm_info }
-
-    def run_response_job(response, key)
-      @calls << [:run_response_job, key]
-      case key
-      when "associateipaddressresponse"
+    def run_job(jobid)
+      @calls << [:run_job, jobid]
+      case jobid
+      when "job-ip"
         { "ipaddress" => { "id" => "ip-uuid", "ipaddress" => "203.0.113.9" } }
-      when "createfirewallruleresponse"
+      when "create_firewall_rule-job"
         { "firewallrule" => { "id" => "fw-1" } }
       else
-        {}
+        { "virtualmachine" => @vm_info }
       end
     end
 
@@ -157,7 +160,21 @@ RSpec.describe Kitchen::Driver::Cloudstack do
     it "honours the expunge setting" do
       build_driver(cloudstack_expunge: true).destroy(server_id: "vm-1")
 
-      expect(client.call_named(:destroy_virtual_machine)["expunge"]).to be(true)
+      expect(client.call_named(:destroy_virtual_machine)["expunge"]).to eq("true")
+    end
+
+    # cloudstack_client drops any argument whose value is falsey, so a
+    # boolean false never reaches CloudStack at all.
+    it "sends a disabled expunge setting as a string so it is not dropped" do
+      build_driver(cloudstack_expunge: false).destroy(server_id: "vm-1")
+
+      expect(client.call_named(:destroy_virtual_machine)["expunge"]).to eq("false")
+    end
+
+    it "looks the instance up inside a configured project" do
+      build_driver(cloudstack_project_id: "proj-1").status(server_id: "vm-1")
+
+      expect(client.call_named(:list_virtual_machines)["projectid"]).to eq("proj-1")
     end
 
     it "clears the instance details from state" do
@@ -259,7 +276,7 @@ RSpec.describe Kitchen::Driver::Cloudstack do
       driver = build_driver(
         cloudstack_api_key: "key", cloudstack_secret_key: "secret"
       )
-      allow(driver.client.compute).to receive(:list_zones)
+      allow(driver.client.api).to receive(:list_zones)
         .and_raise(StandardError.new("401 unauthorized"))
       messages = []
       allow(driver).to receive(:warn) { |m| messages << m }

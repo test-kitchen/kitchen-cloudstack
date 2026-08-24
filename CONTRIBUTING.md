@@ -18,9 +18,9 @@ most useful thing you can do for this project.
 
 Other changes that would be welcome:
 
-- Wrapping CloudStack and Excon errors in `Kitchen::ActionFailed`, so that bad
-  credentials produce a readable message rather than a `Fog::JSON::DecodeError`
-  and a stack trace.
+- Wrapping CloudStack API errors in `Kitchen::ActionFailed`, so that bad
+  credentials produce a readable message rather than a
+  `CloudstackClient::ApiError` and a stack trace.
 - Making `create` idempotent, so that running it against an instance that
   already exists in state does not deploy a second one.
 - Looking up templates, service offerings, zones and networks by name rather
@@ -72,10 +72,12 @@ Specs live under `spec/`:
 - `spec/kitchen/driver/cloudstack/` covers each supporting class in isolation.
   `ServerOptions` and `Credentials` are plain objects and are tested directly.
 - `spec/integration/lifecycle_spec.rb` runs a full create/status/destroy cycle
-  through real Test Kitchen and real fog, stubbing only the HTTP layer, so
-  request signing, response parsing and plugin wiring are all exercised.
+  through real Test Kitchen and a real `cloudstack_client`, stubbing only the
+  HTTP layer, so request signing, response parsing and plugin wiring are all
+  exercised.
 
-Unit specs inject a fake client rather than stubbing `Fog::Compute` globally.
+Unit specs inject a fake client rather than stubbing `CloudstackClient::Client`
+globally.
 If you add behaviour that talks to CloudStack, prefer the same approach: it
 keeps the tests fast and makes it obvious which API calls a change actually
 makes.

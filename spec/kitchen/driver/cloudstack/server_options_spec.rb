@@ -83,4 +83,44 @@ RSpec.describe Kitchen::Driver::Cloudstack::ServerOptions do
 
     expect(opts["displayname"]).to eq("my-server")
   end
+
+  it "deploys into a configured project" do
+    opts = options_for(base_config.merge(cloudstack_project_id: "proj-1"))
+
+    expect(opts["projectid"]).to eq("proj-1")
+  end
+
+  it "omits the project when none is configured" do
+    expect(options_for(base_config)).not_to have_key("projectid")
+  end
+
+  describe "custom service offering sizing" do
+    # CloudStack takes this as a map. Sent as flat "details[0].cpuNumber"
+    # parameters they are rejected as unknown, so the shape matters.
+    it "sends the sizing as a details map" do
+      opts = options_for(base_config.merge(
+        cloudstack_serviceoffering_cpu: 2,
+        cloudstack_serviceoffering_cpuspeed: 2000,
+        cloudstack_serviceoffering_memory: 4096
+      ))
+
+      expect(opts["details"]).to eq([{ "cpuNumber" => 2, "cpuSpeed" => 2000, "memory" => 4096 }])
+    end
+
+    it "sends only the sizing values that were configured" do
+      opts = options_for(base_config.merge(cloudstack_serviceoffering_memory: 4096))
+
+      expect(opts["details"]).to eq([{ "memory" => 4096 }])
+    end
+
+    it "omits the details map when no sizing was configured" do
+      expect(options_for(base_config)).not_to have_key("details")
+    end
+
+    it "does not send the sizing as flat parameters" do
+      opts = options_for(base_config.merge(cloudstack_serviceoffering_cpu: 2))
+
+      expect(opts.keys.grep(/details\[/)).to be_empty
+    end
+  end
 end

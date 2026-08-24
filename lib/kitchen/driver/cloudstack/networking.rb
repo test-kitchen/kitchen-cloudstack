@@ -12,7 +12,8 @@
 # limitations under the License.
 
 require "kitchen/driver/base"
-require "fog/cloudstack"
+require "cloudstack_client"
+require_relative "client"
 
 module Kitchen
   module Driver
@@ -25,7 +26,7 @@ module Kitchen
       # transport connects on, so a WinRM instance gets 5985 rather than SSH's
       # 22 without any extra configuration.
       class Networking
-        # CloudStack reports an already-deleted resource as a BadRequest with
+        # CloudStack reports an already-deleted resource as an API error with
         # this in the message. Teardown treats it as success.
         ALREADY_GONE = /does not exist/
 
@@ -45,12 +46,13 @@ module Kitchen
         # @param state [Hash] mutable instance state
         # @return [String] the allocated public IP address
         def associate_public_ip(state)
-          response = compute.associate_ip_address(
+          response = api.associate_ip_address({
             "zoneid" => config[:cloudstack_zone_id],
             "vpcid" => vpc_id,
-            "networkid" => config[:cloudstack_network_id]
-          )
-          result = client.run_response_job(response, "associateipaddressresponse")
+            "networkid" => config[:cloudstack_network_id],
+            "projectid" => config[:cloudstack_project_id],
+          }, Client::SYNC)
+          result = client.run_job(response.fetch("jobid"))
           address = result.fetch("ipaddress")
 
           state[:ipaddressid] = address.fetch("id")
@@ -65,17 +67,21 @@ module Kitchen
         # @param virtualmachine_id [String] the instance to forward to
         # @return [void]
         def create_port_forward(state, virtualmachine_id)
-          response = compute.create_port_forwarding_rule(
+          response = api.create_port_forwarding_rule({
             "ipaddressid" => state[:ipaddressid],
             "privateport" => port,
             "protocol" => "TCP",
             "publicport" => port,
             "virtualmachineid" => virtualmachine_id,
             "networkid" => config[:cloudstack_network_id],
-            "openfirewall" => false
-          )
-          state[:forwardingruleid] = response.fetch("createportforwardingruleresponse", {})["id"]
-          client.run_response_job(response, "createportforwardingruleresponse")
+            # cloudstack_client drops falsey argument values, and CloudStack
+            # defaults this to true on a non-VPC network, so a boolean false
+            # here would let CloudStack open the firewall itself -- creating a
+            # rule teardown does not know about.
+            "openfirewall" => "false",
+          }, Client::SYNC)
+          state[:forwardingruleid] = response["id"]
+          client.run_job(response.fetch("jobid"))
         end
 
         # Removes everything {#associate_public_ip} and {#create_port_forward}
@@ -93,23 +99,22 @@ module Kitchen
 
         attr_reader :config, :client, :port, :logger
 
-        # @return [Fog::Compute] the shared CloudStack connection
-        def compute = client.compute
+        # @return [CloudstackClient::Client] the shared CloudStack connection
+        def api = client.api
 
         # Opens the transport's port on the allocated public address.
         #
         # @param state [Hash] mutable instance state; gains +firewall_rule_id+
         # @return [void]
         def create_firewall_rule(state)
-          response = compute.create_firewall_rule(
-            "projectid" => config[:cloudstack_project_id],
+          response = api.create_firewall_rule({
             "cidrlist" => config[:cloudstack_firewall_cidr] || "0.0.0.0/0",
             "protocol" => "tcp",
             "startport" => port,
             "endport" => port,
-            "ipaddressid" => state[:ipaddressid]
-          )
-          result = client.run_response_job(response, "createfirewallruleresponse")
+            "ipaddressid" => state[:ipaddressid],
+          }, Client::SYNC)
+          result = client.run_job(response.fetch("jobid"))
           rule = result["firewallrule"]
           state[:firewall_rule_id] = rule["id"] if rule.is_a?(Hash)
         end
@@ -120,8 +125,8 @@ module Kitchen
         # @return [void]
         def delete_port_forward(state)
           tolerating_missing("port forwarding rule") do
-            response = compute.delete_port_forwarding_rule(state[:forwardingruleid])
-            client.run_response_job(response, "deleteportforwardingruleresponse")
+            response = api.delete_port_forwarding_rule({ "id" => state[:forwardingruleid] }, Client::SYNC)
+            client.run_job(response.fetch("jobid"))
           end
         end
 
@@ -131,8 +136,8 @@ module Kitchen
         # @return [void]
         def delete_firewall_rule(state)
           tolerating_missing("firewall rule") do
-            response = compute.delete_firewall_rule(state[:firewall_rule_id])
-            client.run_response_job(response, "deletefirewallruleresponse")
+            response = api.delete_firewall_rule({ "id" => state[:firewall_rule_id] }, Client::SYNC)
+            client.run_job(response.fetch("jobid"))
           end
         end
 
@@ -142,8 +147,8 @@ module Kitchen
         # @return [void]
         def release_public_ip(state)
           tolerating_missing("public IP address") do
-            response = compute.disassociate_ip_address(state[:ipaddressid])
-            client.run_response_job(response, "disassociateipaddressresponse")
+            response = api.disassociate_ip_address({ "id" => state[:ipaddressid] }, Client::SYNC)
+            client.run_job(response.fetch("jobid"))
           end
         end
 
@@ -153,11 +158,11 @@ module Kitchen
         # @param description [String] names the resource, for the debug message
         # @yield the deletion call to attempt
         # @return [void]
-        # @raise [Fog::Cloudstack::Compute::BadRequest] for any error other
-        #   than the resource already being gone
+        # @raise [CloudstackClient::ApiError] for any error other than the
+        #   resource already being gone
         def tolerating_missing(description)
           yield
-        rescue Fog::Cloudstack::Compute::BadRequest => e
+        rescue CloudstackClient::ApiError => e
           raise unless e.to_s.match?(ALREADY_GONE)
 
           logger&.debug("CloudStack #{description} was already gone: #{e}")
@@ -165,7 +170,7 @@ module Kitchen
 
         # A VPC network needs its vpcid passed when allocating an address.
         def vpc_id
-          networks = compute.list_networks.fetch("listnetworksresponse", {})["network"]
+          networks = api.list_networks("projectid" => config[:cloudstack_project_id])
           return nil unless networks.is_a?(Array)
 
           network = networks.find { |n| n["id"] == config[:cloudstack_network_id] }

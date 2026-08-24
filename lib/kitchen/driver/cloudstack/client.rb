@@ -13,8 +13,7 @@
 
 require "kitchen/driver/base"
 require "kitchen/errors"
-require "fog/cloudstack"
-require "uri" unless defined?(URI)
+require "cloudstack_client"
 
 module Kitchen
   module Driver
@@ -24,6 +23,14 @@ module Kitchen
       # Almost every CloudStack call that changes something returns a job id
       # rather than a result, so callers use {#run_job} to turn that job id
       # into the eventual result, or into an ActionFailed.
+      #
+      # cloudstack_client can wait for those jobs itself, but doing so hands
+      # back only the finished job result -- the caller never sees the id of
+      # the resource being built. The driver records that id in instance state
+      # before waiting, so that an interrupted +kitchen create+ still leaves
+      # behind enough state to destroy what it started. Every asynchronous
+      # call is therefore made with +sync: true+, which returns CloudStack's
+      # immediate response, and the waiting happens here instead.
       class Client
         # Value CloudStack reports in an async job's "jobstatus" field while
         # the job is still running.
@@ -43,36 +50,37 @@ module Kitchen
         # not configured.
         DEFAULT_TIMEOUT = 600
 
+        # Options passed to every asynchronous API call, asking for
+        # CloudStack's immediate response rather than cloudstack_client's own
+        # job polling. See the class documentation for why.
+        SYNC = { sync: true }.freeze
+
         # @param config [Hash] the driver configuration
-        # @param compute [Fog::Compute, nil] an existing connection, for tests
+        # @param api [CloudstackClient::Client, nil] an existing connection,
+        #   for tests
         # @param sleeper [#call, nil] receives a number of seconds to wait,
         #   for tests that must not actually sleep
-        def initialize(config, compute: nil, sleeper: nil)
+        def initialize(config, api: nil, sleeper: nil)
           @config = config
-          @compute = compute
+          @api = api
           @sleeper = sleeper || ->(seconds) { sleep(seconds) }
         end
 
-        # The fog CloudStack connection, built from the configured endpoint.
+        # The CloudStack connection, built from the configured endpoint.
         #
-        # The API URL is split into scheme, host, port, and path because fog
-        # wants them separately rather than as one URL.
+        # Certificate verification is on unless +disable_ssl_validation+ asks
+        # for it to be off, and unlike the fog connection this replaced, that
+        # choice is scoped to this connection rather than set process-wide.
         #
-        # @return [Fog::Compute] a CloudStack compute connection
-        def compute
-          @compute ||= begin
-            uri = URI.parse(config[:cloudstack_api_url])
-            Fog::Compute.new(
-              provider: :cloudstack,
-              cloudstack_api_key: config[:cloudstack_api_key],
-              cloudstack_secret_access_key: config[:cloudstack_secret_key],
-              cloudstack_host: uri.host,
-              cloudstack_port: uri.port,
-              cloudstack_path: uri.path,
-              cloudstack_project_id: config[:cloudstack_project_id],
-              cloudstack_scheme: uri.scheme
-            )
-          end
+        # @return [CloudstackClient::Client] a CloudStack API connection
+        def api
+          @api ||= CloudstackClient::Client.new(
+            config[:cloudstack_api_url],
+            config[:cloudstack_api_key],
+            config[:cloudstack_secret_key],
+            quiet: true,
+            ssl_verify: !config[:disable_ssl_validation]
+          )
         end
 
         # Waits for an asynchronous CloudStack job to finish.
@@ -84,7 +92,7 @@ module Kitchen
           elapsed = 0
 
           loop do
-            response = compute.query_async_job_result(jobid)["queryasyncjobresultresponse"]
+            response = api.query_async_job_result("jobid" => jobid)
 
             case response.fetch("jobstatus").to_i
             when JOB_SUCCEEDED
@@ -101,15 +109,6 @@ module Kitchen
             sleeper.call(poll_interval)
             elapsed += poll_interval
           end
-        end
-
-        # Runs a request that returns an async job id, and waits for it.
-        #
-        # @param response [Hash] the raw response from a fog request
-        # @param key [String] the response envelope key holding the job id
-        # @return [Hash] the job's "jobresult" payload
-        def run_response_job(response, key)
-          run_job(response.fetch(key).fetch("jobid"))
         end
 
         private
