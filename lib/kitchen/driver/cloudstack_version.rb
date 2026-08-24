@@ -20,6 +20,6 @@ module Kitchen
   module Driver
 
     # Version string for Cloudstack Kitchen driver
-    CLOUDSTACK_VERSION = "1.0.0".freeze
+    CLOUDSTACK_VERSION = "1.1.0".freeze
   end
 end
