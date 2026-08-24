@@ -204,6 +204,81 @@ RSpec.describe Kitchen::Driver::Cloudstack do
     end
   end
 
+  describe "#doctor" do
+    # doctor reports through warn; capture the messages rather than the log
+    # format so the assertions are about what it found, not how it printed it.
+    def doctor_run(config = {})
+      driver = build_driver(config)
+      messages = []
+      allow(driver).to receive(:warn) { |m| messages << m }
+      [driver.doctor({}), messages]
+    end
+
+    it "reports the credentials the base config leaves unset" do
+      found, messages = doctor_run
+
+      expect(found).to be(true)
+      expect(messages.join("\n")).to include("cloudstack_api_key is not set")
+      expect(messages.join("\n")).to include("cloudstack_secret_key is not set")
+    end
+
+    it "names every missing setting in one run rather than one per run" do
+      driver = described_class.new({})
+      messages = []
+      allow(driver).to receive(:warn) { |m| messages << m }
+
+      driver.doctor({})
+
+      %w{cloudstack_api_url cloudstack_api_key cloudstack_secret_key
+         cloudstack_template_id cloudstack_serviceoffering_id
+         cloudstack_zone_id}.each do |key|
+        expect(messages.join("\n")).to include("#{key} is not set")
+      end
+    end
+
+    it "passes when everything is set and CloudStack answers" do
+      found, messages = doctor_run(
+        cloudstack_api_key: "key", cloudstack_secret_key: "secret"
+      )
+
+      expect(found).to be(false)
+      expect(messages).to be_empty
+    end
+
+    it "reports an api url that is not a URL" do
+      found, messages = doctor_run(
+        cloudstack_api_url: "not a url", cloudstack_api_key: "key",
+        cloudstack_secret_key: "secret"
+      )
+
+      expect(found).to be(true)
+      expect(messages.join("\n")).to match(/is not a URL|has no host/)
+    end
+
+    it "reports credentials CloudStack rejects" do
+      driver = build_driver(
+        cloudstack_api_key: "key", cloudstack_secret_key: "secret"
+      )
+      allow(driver.client.compute).to receive(:list_zones)
+        .and_raise(StandardError.new("401 unauthorized"))
+      messages = []
+      allow(driver).to receive(:warn) { |m| messages << m }
+
+      expect(driver.doctor({})).to be(true)
+      expect(messages.join("\n")).to include("rejected the configured credentials")
+    end
+
+    it "stays quiet about connectivity when the endpoint is missing" do
+      driver = described_class.new({})
+      messages = []
+      allow(driver).to receive(:warn) { |m| messages << m }
+
+      driver.doctor({})
+
+      expect(messages.join("\n")).not_to include("rejected the configured credentials")
+    end
+  end
+
   describe "transport awareness" do
     context "with a WinRM transport" do
       let(:transport) { Kitchen::Transport::Winrm.new }
