@@ -43,6 +43,10 @@ module Kitchen
         # not configured.
         DEFAULT_TIMEOUT = 600
 
+        # @param config [Hash] the driver configuration
+        # @param compute [Fog::Compute, nil] an existing connection, for tests
+        # @param sleeper [#call, nil] receives a number of seconds to wait,
+        #   for tests that must not actually sleep
         def initialize(config, compute: nil, sleeper: nil)
           @config = config
           @compute = compute
@@ -124,6 +128,9 @@ module Kitchen
 
         # CloudStack reports failures as an "errortext" inside the job result,
         # but falls back to the whole payload when the shape is unexpected.
+        #
+        # @param response [Hash] the async job payload
+        # @return [String] a message describing the failure
         def job_error(response)
           result = response["jobresult"]
           return response.inspect unless result.is_a?(Hash)

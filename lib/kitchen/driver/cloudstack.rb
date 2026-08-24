@@ -128,6 +128,7 @@ module Kitchen
 
       # Deploys the instance and waits for CloudStack to finish building it.
       #
+      # @param state [Hash] mutable instance state; gains +server_id+
       # @return [Hash] the "virtualmachine" payload describing the instance
       def deploy_instance(state)
         options = ServerOptions.new(config, instance_name: instance.name).to_h
@@ -144,6 +145,11 @@ module Kitchen
 
       # Works out the address Test Kitchen should connect to, allocating a
       # public address and forwarding the transport's port when asked to.
+      #
+      # @param state [Hash] mutable instance state; gains +ipaddressid+ and
+      #   +forwardingruleid+ when a public address is associated
+      # @param server_info [Hash] the "virtualmachine" payload from CloudStack
+      # @return [String] the address the transport should connect to
       def hostname_for(state, server_info)
         unless config[:associate_public_ip]
           return config[:cloudstack_vm_public_ip] ||
@@ -161,6 +167,10 @@ module Kitchen
 
       # Credentials go into state because the transport merges state over its
       # own config, so this is how a driver tells the transport how to log in.
+      #
+      # @param state [Hash] mutable instance state; gains the credential keys
+      # @param server_info [Hash] the "virtualmachine" payload from CloudStack
+      # @return [void]
       def apply_credentials(state, server_info)
         credentials = Credentials.new(config)
         state.merge!(credentials.to_state(server_info))

@@ -49,6 +49,10 @@ module Kitchen
         # pre-encoded is passed through rather than double-encoded.
         BASE64_PATTERN = %r{^(?:[A-Za-z0-9+/]{4}\n?)*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$}
 
+        # @param config [Hash] the driver configuration
+        # @param instance_name [String] the Test Kitchen instance name
+        # @param login [String] the local username, used in the generated name
+        # @param hostname [String] the local hostname, used in the generated name
         def initialize(config, instance_name:, login: Etc.getlogin, hostname: Socket.gethostname)
           @config = config
           @instance_name = instance_name
@@ -106,6 +110,10 @@ module Kitchen
 
         # Shortens the longest part repeatedly until the parts fit the budget,
         # which keeps the shorter, more identifying parts intact.
+        #
+        # @param parts [Array<String>] the name components
+        # @param budget [Integer] the total characters the parts may occupy
+        # @return [Array<String>] the components, shortened to fit
         def truncate_to_budget(parts, budget)
           parts = parts.dup
           while parts.sum(&:length) > budget
