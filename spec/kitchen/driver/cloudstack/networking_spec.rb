@@ -2,8 +2,12 @@ require "spec_helper"
 require "kitchen/driver/cloudstack/networking"
 
 RSpec.describe Kitchen::Driver::Cloudstack::Networking do
-  # Records every API call and replays canned responses per request name.
-  class RecordingCompute
+  # Records every API call and replays canned responses per command name.
+  #
+  # Asynchronous commands are called with +sync: true+, so each one answers
+  # with CloudStack's immediate response -- an id and a job id -- rather than
+  # the finished job result.
+  class RecordingApi
     attr_reader :calls
 
     def initialize(responses = {})
@@ -16,7 +20,7 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
       response = @responses[name]
       raise response if response.is_a?(Exception)
 
-      response || {}
+      response || { "id" => "#{name}-id", "jobid" => "#{name}-job" }
     end
 
     def respond_to_missing?(_name, _include_private = false) = true
@@ -24,40 +28,38 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
     def call_named(name) = calls.find { |call| call.first == name }&.last
   end
 
-  # Returns the "jobresult" straight from the canned response envelope.
+  # Answers job results by job id.
   class FakeClient
-    attr_reader :compute
+    attr_reader :api
 
-    def initialize(compute, job_results = {})
-      @compute = compute
+    def initialize(api, job_results = {})
+      @api = api
       @job_results = job_results
     end
 
-    def run_response_job(response, key)
-      @job_results[key] || response.fetch(key, {})["jobresult"] || {}
-    end
+    def run_job(jobid) = @job_results.fetch(jobid, {})
   end
 
   let(:associate_response) do
-    { "associateipaddressresponse" => { "jobid" => "job-ip", "id" => "ip-uuid" } }
+    { "jobid" => "job-ip", "id" => "ip-uuid" }
   end
 
   let(:job_results) do
     {
-      "associateipaddressresponse" => { "ipaddress" => { "id" => "ip-uuid", "ipaddress" => "203.0.113.9" } },
-      "createfirewallruleresponse" => { "firewallrule" => { "id" => "fw-1" } },
+      "job-ip" => { "ipaddress" => { "id" => "ip-uuid", "ipaddress" => "203.0.113.9" } },
+      "create_firewall_rule-job" => { "firewallrule" => { "id" => "fw-1" } },
     }
   end
 
   def networking(config: {}, port: 22, responses: {}, results: job_results)
-    compute = RecordingCompute.new({ associate_ip_address: associate_response }.merge(responses))
+    api = RecordingApi.new({ associate_ip_address: associate_response }.merge(responses))
     described_class.new(
       { cloudstack_zone_id: "zone-1", cloudstack_network_id: "net-1" }.merge(config),
-      client: FakeClient.new(compute, results), port: port
-    ).tap { |n| n.instance_variable_set(:@recording_compute, compute) }
+      client: FakeClient.new(api, results), port: port
+    ).tap { |n| n.instance_variable_set(:@recording_api, api) }
   end
 
-  def compute_of(net) = net.instance_variable_get(:@recording_compute)
+  def api_of(net) = net.instance_variable_get(:@recording_api)
 
   describe "#associate_public_ip" do
     it "returns the allocated public IP address" do
@@ -77,14 +79,14 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
       net = networking
       net.associate_public_ip({})
 
-      expect(compute_of(net).call_named(:create_firewall_rule)).to be_nil
+      expect(api_of(net).call_named(:create_firewall_rule)).to be_nil
     end
 
     it "opens the transport's port when a firewall rule is requested" do
       net = networking(config: { cloudstack_create_firewall_rule: true }, port: 5985)
       net.associate_public_ip({})
 
-      rule = compute_of(net).call_named(:create_firewall_rule)
+      rule = api_of(net).call_named(:create_firewall_rule)
       expect(rule["startport"]).to eq(5985)
       expect(rule["endport"]).to eq(5985)
     end
@@ -93,7 +95,7 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
       net = networking(config: { cloudstack_create_firewall_rule: true })
       net.associate_public_ip({})
 
-      expect(compute_of(net).call_named(:create_firewall_rule)["cidrlist"]).to eq("0.0.0.0/0")
+      expect(api_of(net).call_named(:create_firewall_rule)["cidrlist"]).to eq("0.0.0.0/0")
     end
 
     it "restricts the firewall rule to a configured CIDR" do
@@ -103,7 +105,7 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
       })
       net.associate_public_ip({})
 
-      expect(compute_of(net).call_named(:create_firewall_rule)["cidrlist"]).to eq("198.51.100.0/24")
+      expect(api_of(net).call_named(:create_firewall_rule)["cidrlist"]).to eq("198.51.100.0/24")
     end
 
     it "records the firewall rule id so teardown can remove it" do
@@ -115,12 +117,31 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
     end
   end
 
+  describe "project scoping" do
+    # fog applied the project to every request from the connection itself.
+    # cloudstack_client has no equivalent, so each command that accepts a
+    # project has to be given one.
+    it "allocates the address inside a configured project" do
+      net = networking(config: { cloudstack_project_id: "proj-1" })
+      net.associate_public_ip({})
+
+      expect(api_of(net).call_named(:associate_ip_address)["projectid"]).to eq("proj-1")
+    end
+
+    it "looks for the network inside a configured project" do
+      net = networking(config: { cloudstack_project_id: "proj-1" })
+      net.associate_public_ip({})
+
+      expect(api_of(net).call_named(:list_networks)["projectid"]).to eq("proj-1")
+    end
+  end
+
   describe "#create_port_forward" do
     it "forwards the transport's port rather than always SSH" do
       net = networking(port: 5985)
       net.create_port_forward({ ipaddressid: "ip-uuid" }, "vm-1")
 
-      rule = compute_of(net).call_named(:create_port_forwarding_rule)
+      rule = api_of(net).call_named(:create_port_forwarding_rule)
       expect(rule["privateport"]).to eq(5985)
       expect(rule["publicport"]).to eq(5985)
     end
@@ -129,7 +150,26 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
       net = networking(port: 22)
       net.create_port_forward({ ipaddressid: "ip-uuid" }, "vm-1")
 
-      expect(compute_of(net).call_named(:create_port_forwarding_rule)["privateport"]).to eq(22)
+      expect(api_of(net).call_named(:create_port_forwarding_rule)["privateport"]).to eq(22)
+    end
+
+    # openfirewall defaults to true on a non-VPC network, so the driver has to
+    # say false explicitly or CloudStack opens the firewall itself -- creating
+    # a rule teardown does not know about. cloudstack_client drops arguments
+    # whose value is falsey, so this has to be the string "false".
+    it "asks CloudStack not to open the firewall itself" do
+      net = networking(port: 22)
+      net.create_port_forward({ ipaddressid: "ip-uuid" }, "vm-1")
+
+      expect(api_of(net).call_named(:create_port_forwarding_rule)["openfirewall"]).to eq("false")
+    end
+
+    it "records the forwarding rule id before waiting for the job" do
+      net = networking(port: 22)
+      state = { ipaddressid: "ip-uuid" }
+      net.create_port_forward(state, "vm-1")
+
+      expect(state[:forwardingruleid]).to eq("create_port_forwarding_rule-id")
     end
   end
 
@@ -138,7 +178,7 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
       net = networking
       net.teardown(ipaddressid: "ip-uuid", forwardingruleid: "fwd-1")
 
-      names = compute_of(net).calls.map(&:first)
+      names = api_of(net).calls.map(&:first)
       expect(names.index(:delete_port_forwarding_rule)).to be < names.index(:disassociate_ip_address)
     end
 
@@ -146,21 +186,37 @@ RSpec.describe Kitchen::Driver::Cloudstack::Networking do
       net = networking
       net.teardown(ipaddressid: "ip-uuid", firewall_rule_id: "fw-1")
 
-      expect(compute_of(net).calls.map(&:first)).to include(:delete_firewall_rule)
+      expect(api_of(net).calls.map(&:first)).to include(:delete_firewall_rule)
+    end
+
+    it "deletes rules by id" do
+      net = networking
+      net.teardown(ipaddressid: "ip-uuid", forwardingruleid: "fwd-1")
+
+      expect(api_of(net).call_named(:delete_port_forwarding_rule)).to eq({ "id" => "fwd-1" })
+      expect(api_of(net).call_named(:disassociate_ip_address)).to eq({ "id" => "ip-uuid" })
     end
 
     it "ignores resources CloudStack reports as already gone" do
-      gone = Fog::Cloudstack::Compute::BadRequest.new("Entity does not exist")
+      gone = CloudstackClient::ApiError.new("Status 431: Entity does not exist.")
       net = networking(responses: { disassociate_ip_address: gone })
 
       expect { net.teardown(ipaddressid: "ip-uuid") }.not_to raise_error
+    end
+
+    it "still raises errors that are not an already-gone resource" do
+      boom = CloudstackClient::ApiError.new("Status 431: Insufficient permissions.")
+      net = networking(responses: { disassociate_ip_address: boom })
+
+      expect { net.teardown(ipaddressid: "ip-uuid") }
+        .to raise_error(CloudstackClient::ApiError, /Insufficient permissions/)
     end
 
     it "does nothing when no public address was ever associated" do
       net = networking
       net.teardown({})
 
-      expect(compute_of(net).calls).to be_empty
+      expect(api_of(net).calls).to be_empty
     end
   end
 end

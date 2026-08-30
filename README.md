@@ -12,7 +12,7 @@ A [Test Kitchen](https://kitchen.ci/) driver for [Apache CloudStack](https://clo
 - API credentials for it: an API key, a secret key, and the API URL
 - Test Kitchen 3.0 or newer, including the version bundled with current Cinc
   Workstation and Chef Workstation
-- `fog-cloudstack`, installed automatically as a dependency
+- `cloudstack_client`, installed automatically as a dependency
 
 ## Installation
 

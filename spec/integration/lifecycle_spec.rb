@@ -3,21 +3,38 @@ require "kitchen/driver/cloudstack"
 require "kitchen/transport/dummy"
 require "kitchen/provisioner/dummy"
 require "kitchen/verifier/dummy"
-require "excon"
+require "json"
+require "net/http"
 require "tmpdir"
 
-# Exercises the whole stack -- Test Kitchen, the driver, and fog -- with only
-# the HTTP boundary stubbed, so the real request signing, response parsing and
-# plugin wiring all run.
+# Exercises the whole stack -- Test Kitchen, the driver, and cloudstack_client
+# -- with only the HTTP boundary stubbed, so the real request signing, response
+# parsing and plugin wiring all run.
 RSpec.describe "CloudStack instance lifecycle" do
+  # Stands in for Net::HTTP, answering each request from #api_response.
+  class StubHttp
+    attr_accessor :use_ssl, :verify_mode, :read_timeout
+
+    def initialize(&responder)
+      @responder = responder
+    end
+
+    def request(req)
+      body = @responder.call(req.uri || URI.parse(req.path))
+      response = Net::HTTPOK.new("1.1", "200", "")
+      response.instance_variable_set(:@body, body)
+      response.instance_variable_set(:@read, true)
+      response
+    end
+  end
+
   around do |example|
-    previous = Excon.defaults[:mock]
-    Excon.defaults[:mock] = true
-    Excon.stub({}) { |request| api_response(request) }
+    original = Net::HTTP.method(:new)
+    stub = StubHttp.new { |uri| api_response(uri) }
+    Net::HTTP.define_singleton_method(:new) { |*_args| stub }
     example.run
   ensure
-    Excon.stubs.clear
-    Excon.defaults[:mock] = previous
+    Net::HTTP.define_singleton_method(:new, original)
   end
 
   let(:vm) do
@@ -30,8 +47,8 @@ RSpec.describe "CloudStack instance lifecycle" do
   end
 
   # Answers the handful of CloudStack commands this lifecycle issues.
-  def api_response(request)
-    command = URI.decode_www_form(request[:query].to_s).to_h["command"]
+  def api_response(uri)
+    command = URI.decode_www_form(uri.query.to_s).to_h["command"]
     body =
       case command
       when "deployVirtualMachine"
@@ -42,6 +59,7 @@ RSpec.describe "CloudStack instance lifecycle" do
         } }
       when "listVirtualMachines"
         { "listvirtualmachinesresponse" => {
+          "count" => 1,
           "virtualmachine" => [{ "id" => "vm-e2e", "state" => "Running" }],
         } }
       when "destroyVirtualMachine"
@@ -50,7 +68,7 @@ RSpec.describe "CloudStack instance lifecycle" do
         {}
       end
 
-    { status: 200, body: Fog::JSON.encode(body), headers: { "Content-Type" => "application/json" } }
+    JSON.generate(body)
   end
 
   let(:driver) do

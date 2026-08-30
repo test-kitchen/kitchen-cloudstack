@@ -64,7 +64,6 @@ module Kitchen
       # @return [void]
       def create(state)
         super
-        disable_ssl_validation! if config[:disable_ssl_validation]
 
         server_info = deploy_instance(state)
 
@@ -88,10 +87,11 @@ module Kitchen
 
         networking.teardown(state) if config[:associate_public_ip]
 
-        client.compute.destroy_virtual_machine(
+        client.api.destroy_virtual_machine({
           "id" => state[:server_id],
-          "expunge" => !!config[:cloudstack_expunge]
-        )
+          # Stringified because cloudstack_client drops falsey values.
+          "expunge" => (!!config[:cloudstack_expunge]).to_s,
+        }, Client::SYNC)
         info("CloudStack instance <#{state[:server_id]}> destroyed.")
 
         STATE_KEYS.each { |key| state.delete(key) }
@@ -176,7 +176,7 @@ module Kitchen
         uri = URI.parse(config[:cloudstack_api_url])
         return ["cloudstack_api_url (#{config[:cloudstack_api_url]}) has no host."] if uri.host.nil?
 
-        client.compute.list_zones
+        client.api.list_zones
         []
       rescue URI::InvalidURIError => e
         ["cloudstack_api_url (#{config[:cloudstack_api_url]}) is not a URL: #{e.message}"]
@@ -193,8 +193,7 @@ module Kitchen
         options = ServerOptions.new(config, instance_name: instance.name).to_h
         debug("Deploying CloudStack instance with #{options}")
 
-        response = client.compute.deploy_virtual_machine(options)
-          .fetch("deployvirtualmachineresponse")
+        response = client.api.deploy_virtual_machine(options, Client::SYNC)
 
         state[:server_id] = response.fetch("id")
         info("CloudStack instance <#{state[:server_id]}> created.")
@@ -261,8 +260,10 @@ module Kitchen
       # @return [String, nil] e.g. +"Running"+, or nil when CloudStack returns
       #   no matching machine
       def lookup_instance_state(server_id)
-        response = client.compute.list_virtual_machines("id" => server_id)
-        machines = response.fetch("listvirtualmachinesresponse", {})["virtualmachine"]
+        machines = client.api.list_virtual_machines(
+          "id" => server_id,
+          "projectid" => config[:cloudstack_project_id]
+        )
         return nil unless machines.is_a?(Array) && !machines.empty?
 
         machines.first["state"]
@@ -281,17 +282,6 @@ module Kitchen
       # 5986 for WinRM. Port forwarding and firewall rules follow it.
       def transport_port
         instance.transport[:port]
-      end
-
-      # Turns off TLS certificate verification for every Excon request.
-      #
-      # This is process-wide, not scoped to this driver, which is why it is
-      # only done when +disable_ssl_validation+ is explicitly set.
-      #
-      # @return [void]
-      def disable_ssl_validation!
-        require "excon" unless defined?(Excon)
-        Excon.defaults[:ssl_verify_peer] = false
       end
     end
   end

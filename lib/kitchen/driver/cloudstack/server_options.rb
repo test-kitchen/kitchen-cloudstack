@@ -40,9 +40,16 @@ module Kitchen
           "diskofferingid" => :cloudstack_diskoffering_id,
           "size" => :cloudstack_diskoffering_size,
           "name" => :host_name,
-          "details[0].cpuNumber" => :cloudstack_serviceoffering_cpu,
-          "details[0].cpuSpeed" => :cloudstack_serviceoffering_cpuspeed,
-          "details[0].memory" => :cloudstack_serviceoffering_memory,
+          "projectid" => :cloudstack_project_id,
+        }.freeze
+
+        # Custom service offering sizing, keyed by the name CloudStack expects
+        # inside the "details" map. Any entry whose config value is nil is
+        # dropped, so a partially specified offering sends only what was set.
+        DETAIL_PARAMS = {
+          "cpuNumber" => :cloudstack_serviceoffering_cpu,
+          "cpuSpeed" => :cloudstack_serviceoffering_cpuspeed,
+          "memory" => :cloudstack_serviceoffering_memory,
         }.freeze
 
         # Matches a string that is already valid base64, so user data supplied
@@ -74,6 +81,9 @@ module Kitchen
             params[param] = value unless value.nil?
           end
 
+          details = sizing_details
+          params["details"] = [details] unless details.empty?
+
           params[:userdata] = userdata if config[:cloudstack_userdata]
 
           params[:templateid] = config[:cloudstack_template_id]
@@ -92,6 +102,22 @@ module Kitchen
         private
 
         attr_reader :config, :instance_name, :login, :hostname
+
+        # The custom sizing to send as CloudStack's "details" map.
+        #
+        # This is a map rather than three flat parameters because that is what
+        # the API takes. cloudstack_client checks every argument against the
+        # API definition and drops the ones it does not recognise, so flat
+        # "details[0].cpuNumber" parameters would be discarded silently and
+        # the instance would come up with the offering's default sizing.
+        #
+        # @return [Hash] the set sizing values, which may be empty
+        def sizing_details
+          DETAIL_PARAMS.each_with_object({}) do |(detail, config_key), details|
+            value = config[config_key]
+            details[detail] = value unless value.nil?
+          end
+        end
 
         # Builds a name that is unique per run and short enough for CloudStack.
         #

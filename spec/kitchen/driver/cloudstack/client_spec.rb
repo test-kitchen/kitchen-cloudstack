@@ -3,7 +3,7 @@ require "kitchen/driver/cloudstack/client"
 
 RSpec.describe Kitchen::Driver::Cloudstack::Client do
   # Records the arguments it is called with and replays queued responses.
-  class FakeCompute
+  class FakeApi
     attr_reader :job_queries
 
     def initialize(responses)
@@ -11,20 +11,22 @@ RSpec.describe Kitchen::Driver::Cloudstack::Client do
       @job_queries = []
     end
 
-    def query_async_job_result(jobid)
-      @job_queries << jobid
-      @responses.shift || raise("FakeCompute ran out of responses")
+    def query_async_job_result(args)
+      @job_queries << args
+      @responses.shift || raise("FakeApi ran out of responses")
     end
   end
 
+  # cloudstack_client strips the response envelope, so a job query comes back
+  # as the job payload itself rather than wrapped in a named key.
   def job_response(status, result = {})
-    { "queryasyncjobresultresponse" => { "jobstatus" => status, "jobresult" => result } }
+    { "jobstatus" => status, "jobresult" => result }
   end
 
   def client_for(responses, config = {})
     described_class.new(
       { cloudstack_job_poll_interval: 1, cloudstack_job_timeout: 5 }.merge(config),
-      compute: FakeCompute.new(responses),
+      api: FakeApi.new(responses),
       sleeper: ->(_seconds) {}
     )
   end
@@ -55,58 +57,61 @@ RSpec.describe Kitchen::Driver::Cloudstack::Client do
       expect { client.run_job("job-1") }.to raise_error(Kitchen::ActionFailed, /timed out/i)
     end
 
-    it "queries with the bare job id so fog cannot mutate caller state" do
-      compute = FakeCompute.new([job_response(1)])
+    it "queries by job id" do
+      api = FakeApi.new([job_response(1)])
       client = described_class.new(
         { cloudstack_job_poll_interval: 1, cloudstack_job_timeout: 5 },
-        compute: compute, sleeper: ->(_s) {}
+        api: api, sleeper: ->(_s) {}
       )
 
       client.run_job("job-1")
 
-      expect(compute.job_queries).to eq(["job-1"])
+      expect(api.job_queries).to eq([{ "jobid" => "job-1" }])
     end
   end
 
-  describe "#run_response_job" do
-    it "takes the job id out of the response envelope and waits for that job" do
-      compute = FakeCompute.new([job_response(1, { "done" => true })])
-      client = described_class.new(
-        { cloudstack_job_poll_interval: 1, cloudstack_job_timeout: 5 },
-        compute: compute, sleeper: ->(_s) {}
-      )
-
-      result = client.run_response_job(
-        { "createfirewallruleresponse" => { "jobid" => "job-9" } },
-        "createfirewallruleresponse"
-      )
-
-      expect(result).to eq({ "done" => true })
-      expect(compute.job_queries).to eq(["job-9"])
-    end
-  end
-
-  describe "#compute" do
-    it "builds a fog connection from the CloudStack API url" do
-      client = described_class.new({
+  describe "#api" do
+    let(:config) do
+      {
         cloudstack_api_url: "https://cs.example.com:8443/client/api",
         cloudstack_api_key: "key",
         cloudstack_secret_key: "secret",
-      })
+      }
+    end
 
-      expect(Fog::Compute).to receive(:new).with(
-        hash_including(
-          provider: :cloudstack,
-          cloudstack_host: "cs.example.com",
-          cloudstack_port: 8443,
-          cloudstack_path: "/client/api",
-          cloudstack_scheme: "https",
-          cloudstack_api_key: "key",
-          cloudstack_secret_access_key: "secret"
-        )
+    it "builds a cloudstack_client connection from the CloudStack API url" do
+      expect(CloudstackClient::Client).to receive(:new).with(
+        "https://cs.example.com:8443/client/api",
+        "key",
+        "secret",
+        hash_including(quiet: true)
       )
 
-      client.compute
+      described_class.new(config).api
+    end
+
+    it "verifies the server certificate by default" do
+      expect(CloudstackClient::Client).to receive(:new).with(
+        anything, anything, anything, hash_including(ssl_verify: true)
+      )
+
+      described_class.new(config).api
+    end
+
+    it "stops verifying the server certificate when disable_ssl_validation is set" do
+      expect(CloudstackClient::Client).to receive(:new).with(
+        anything, anything, anything, hash_including(ssl_verify: false)
+      )
+
+      described_class.new(config.merge(disable_ssl_validation: true)).api
+    end
+
+    it "builds the connection only once" do
+      expect(CloudstackClient::Client).to receive(:new).once.and_return(double)
+
+      client = described_class.new(config)
+      client.api
+      client.api
     end
   end
 end
