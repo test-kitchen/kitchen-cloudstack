@@ -27,7 +27,8 @@ module Kitchen
         # CloudStack rejects instance names longer than this.
         MAX_NAME_LENGTH = 64
 
-        # Random suffix appended to generated names, plus its separator.
+        # Length of the random suffix appended to a generated name. The
+        # separators are budgeted for separately, in {#generate_name}.
         SUFFIX_LENGTH = 8
 
         # Optional parameters, keyed by the CloudStack parameter name. Any
@@ -98,6 +99,9 @@ module Kitchen
         # The three descriptive parts are truncated proportionally until the
         # whole name fits, so an oversized login or hostname cannot push the
         # result over the limit.
+        #
+        # @return [String] a name of at most {MAX_NAME_LENGTH} characters,
+        #   ending in a random suffix
         def generate_name
           suffix = Array.new(SUFFIX_LENGTH) { rand(36).to_s(36) }.join
           parts = [instance_name, login, hostname].compact.reject(&:empty?)
@@ -135,6 +139,23 @@ module Kitchen
           data = config[:cloudstack_userdata]
           data.match(BASE64_PATTERN) ? data : Base64.encode64(data)
         end
+
+        # Types for the private readers above. YARD only honours an attribute
+        # directive that comes after the attr_reader statement, and attaching
+        # one directly to the statement documents only its first name, so the
+        # four are documented together down here instead.
+
+        # @!attribute [r] config
+        #   @return [Hash] the driver configuration
+
+        # @!attribute [r] instance_name
+        #   @return [String] the Test Kitchen instance name
+
+        # @!attribute [r] login
+        #   @return [String, nil] the local username, used in a generated name
+
+        # @!attribute [r] hostname
+        #   @return [String, nil] the local hostname, used in a generated name
       end
     end
   end

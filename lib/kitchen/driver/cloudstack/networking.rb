@@ -164,6 +164,9 @@ module Kitchen
         end
 
         # A VPC network needs its vpcid passed when allocating an address.
+        #
+        # @return [String, nil] the configured network's VPC id, or nil when
+        #   the network is not in a VPC, is unknown, or cannot be listed
         def vpc_id
           networks = compute.list_networks.fetch("listnetworksresponse", {})["network"]
           return nil unless networks.is_a?(Array)
@@ -171,6 +174,25 @@ module Kitchen
           network = networks.find { |n| n["id"] == config[:cloudstack_network_id] }
           network && network["vpcid"]
         end
+
+        # Types for the private readers above. YARD only honours an attribute
+        # directive that comes after the attr_reader statement, and attaching
+        # one directly to the statement documents only its first name, so the
+        # four are documented together down here instead.
+
+        # @!attribute [r] config
+        #   @return [Hash] the driver configuration
+
+        # @!attribute [r] client
+        #   @return [Client] the shared CloudStack client, used for its
+        #     connection and its async job handling
+
+        # @!attribute [r] port
+        #   @return [Integer] the transport port that is forwarded and opened
+
+        # @!attribute [r] logger
+        #   @return [#debug, nil] where already-gone resources are noted
+        #     during teardown; nil silences those messages
       end
     end
   end
