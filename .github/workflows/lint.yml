@@ -3,7 +3,40 @@ name: "Test"
 
 "on":
   pull_request:
+  # Also on main, so a merge is verified in its own right. Two pull requests
+  # that are each green can still break main together, and release-please
+  # cuts releases straight off whatever is there.
+  push:
+    branches: [main]
 
 jobs:
   lint-unit:
     uses: test-kitchen/.github/.github/workflows/lint-unit.yml@main
+
+  # Nothing looks at the built gem before it is published: release-please
+  # merges, the publish workflow builds and pushes to RubyGems, and that is
+  # the whole path. So check here that the package still contains what it is
+  # supposed to, rather than finding out from a release.
+  package:
+    name: Gem packaging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Build the gem
+        run: gem build kitchen-cloudstack.gemspec
+
+      - name: Check the package contains the license and the library
+        run: |
+          files="$(gem spec kitchen-cloudstack-*.gem files)"
+          echo "$files"
+          echo "$files" | grep -q '^- LICENSE$' \
+            || { echo "::error::LICENSE is missing from the built gem"; exit 1; }
+          echo "$files" | grep -q '^- lib/kitchen/driver/cloudstack\.rb$' \
+            || { echo "::error::lib/ is missing from the built gem"; exit 1; }
