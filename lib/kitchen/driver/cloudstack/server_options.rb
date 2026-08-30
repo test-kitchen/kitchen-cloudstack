@@ -47,7 +47,22 @@ module Kitchen
 
         # Matches a string that is already valid base64, so user data supplied
         # pre-encoded is passed through rather than double-encoded.
-        BASE64_PATTERN = %r{^(?:[A-Za-z0-9+/]{4}\n?)*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$}
+        #
+        # Anchored with \A and \z rather than ^ and $, which in Ruby anchor to
+        # a line: a single blank line anywhere in the user data used to satisfy
+        # the whole pattern, and cloud-config and shell scripts are full of
+        # blank lines. At least one group is required so the empty string does
+        # not count as pre-encoded either.
+        #
+        # A short word made only of base64 characters is genuinely ambiguous
+        # and is still passed through; there is no way to tell it apart from
+        # data someone encoded themselves.
+        BASE64_PATTERN = %r{
+          \A
+          (?:[A-Za-z0-9+/]{4}\n?)*
+          (?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)
+          \n?\z
+        }x
 
         # @param config [Hash] the driver configuration
         # @param instance_name [String] the Test Kitchen instance name
@@ -128,12 +143,14 @@ module Kitchen
         # The user data to send, base64 encoded.
         #
         # Data that is already valid base64 is passed through untouched rather
-        # than being encoded a second time.
+        # than being encoded a second time. Encoding is strict so the result
+        # is one line: Base64.encode64 wraps at 60 characters, and those line
+        # breaks would go out inside an API query parameter.
         #
         # @return [String] base64-encoded user data
         def userdata
           data = config[:cloudstack_userdata]
-          data.match(BASE64_PATTERN) ? data : Base64.encode64(data)
+          data.match?(BASE64_PATTERN) ? data : Base64.strict_encode64(data)
         end
       end
     end
