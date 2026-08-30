@@ -115,6 +115,53 @@ RSpec.describe Kitchen::Driver::Cloudstack::Credentials do
       expect(creds.warnings.join).to match(/not a private key/i)
     end
 
+    # The old check compared the first token against a short list of public
+    # key types, so anything outside that list -- and the list did not even
+    # name ssh-dss correctly -- was accepted as a private key.
+    it "warns about a public key type the old prefix list did not name" do
+      write_key(@search, "TestKey", "ecdsa-sha2-nistp521 AAAAE2VjZHNh user@host\n")
+      creds = described_class.new(
+        { cloudstack_ssh_keypair_name: "TestKey", keypair_search_directory: @search },
+        home: @home, working_dir: @cwd
+      )
+      creds.to_state({})
+
+      expect(creds.warnings.join).to match(/not a private key/i)
+    end
+
+    it "warns when the file is a PuTTY key rather than a PEM" do
+      write_key(@search, "TestKey", "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\n")
+      creds = described_class.new(
+        { cloudstack_ssh_keypair_name: "TestKey", keypair_search_directory: @search },
+        home: @home, working_dir: @cwd
+      )
+      creds.to_state({})
+
+      expect(creds.warnings.join).to match(/not a private key/i)
+    end
+
+    it "warns when the file is empty" do
+      write_key(@search, "TestKey", "")
+      creds = described_class.new(
+        { cloudstack_ssh_keypair_name: "TestKey", keypair_search_directory: @search },
+        home: @home, working_dir: @cwd
+      )
+      creds.to_state({})
+
+      expect(creds.warnings.join).to match(/not a private key/i)
+    end
+
+    it "stays quiet about an OpenSSH format private key" do
+      write_key(@search, "TestKey", "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk=\n")
+      creds = described_class.new(
+        { cloudstack_ssh_keypair_name: "TestKey", keypair_search_directory: @search },
+        home: @home, working_dir: @cwd
+      )
+      creds.to_state({})
+
+      expect(creds.warnings).to be_empty
+    end
+
     it "warns when a keypair is named but no matching file is found" do
       creds = described_class.new(
         { cloudstack_ssh_keypair_name: "Missing" }, home: @home, working_dir: @cwd
