@@ -137,6 +137,18 @@ module Kitchen
 
           result["errortext"] || result.inspect
         end
+
+        # Types for the private readers above. YARD only honours an attribute
+        # directive that comes after the attr_reader statement, and attaching
+        # one directly to the statement documents only its first name, so the
+        # two are documented together down here instead.
+
+        # @!attribute [r] config
+        #   @return [Hash] the driver configuration
+
+        # @!attribute [r] sleeper
+        #   @return [#call] called with a number of seconds to wait between
+        #     polls of a running job
       end
     end
   end

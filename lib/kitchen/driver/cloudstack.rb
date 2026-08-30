@@ -247,6 +247,10 @@ module Kitchen
 
       # CloudStack's cloud-set-guest-password and SSH key injection can land
       # after the network is up, so allow configuring a settling period.
+      #
+      # Does nothing unless +cloudstack_sync_time+ is set.
+      #
+      # @return [void]
       def wait_for_guest_password_sync
         sync_time = config[:cloudstack_sync_time]
         return unless sync_time
@@ -279,6 +283,8 @@ module Kitchen
 
       # The port the configured transport connects on: 22 for SSH, 5985 or
       # 5986 for WinRM. Port forwarding and firewall rules follow it.
+      #
+      # @return [Integer] the transport's port
       def transport_port
         instance.transport[:port]
       end

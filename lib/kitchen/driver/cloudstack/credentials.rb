@@ -31,6 +31,11 @@ module Kitchen
         # never authenticate. Users hit this by exporting the wrong half.
         PUBLIC_KEY_PREFIXES = %w{ssh-rsa ssh-dsa ssh-ed25519 ecdsa-sha2-nistp256}.freeze
 
+        # Problems found while resolving credentials, worth telling the user
+        # about but not worth failing over.
+        #
+        # @return [Array<String>] messages collected so far, empty until
+        #   {#to_state} has run
         attr_reader :warnings
 
         # @param config [Hash] the driver configuration
@@ -88,6 +93,12 @@ module Kitchen
 
         # CloudStack keypairs are matched to a local <name>.pem file. Look in
         # the configured directory first, then the conventional locations.
+        #
+        # Memoized, including the nil result, so the filesystem is searched
+        # once and a missing key is only warned about once.
+        #
+        # @return [String, nil] path to the private key, or nil when no
+        #   keypair is configured or no matching .pem was found
         def keypair_path
           return @keypair_path if defined?(@keypair_path)
 
@@ -138,6 +149,22 @@ module Kitchen
 
           warnings << "SSH key #{path} is not a private key. Please check your kitchen.yml."
         end
+
+        # Types for the private readers above. YARD only honours an attribute
+        # directive that comes after the attr_reader statement, and attaching
+        # one directly to the statement documents only its first name, so the
+        # three are documented together down here instead.
+
+        # @!attribute [r] config
+        #   @return [Hash] the driver configuration
+
+        # @!attribute [r] home
+        #   @return [String, nil] the home directory keypair paths expand
+        #     against
+
+        # @!attribute [r] working_dir
+        #   @return [String] the directory relative keypair paths expand
+        #     against
       end
     end
   end
