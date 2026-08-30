@@ -55,6 +55,35 @@ RSpec.describe Kitchen::Driver::Cloudstack::ServerOptions do
     expect(opts[:userdata]).to eq(already_encoded)
   end
 
+  # A blank line used to satisfy the "already base64" check, because ^ and $
+  # anchor to a line rather than to the whole string and every branch of the
+  # pattern is optional, so an empty line matched. Cloud-config and shell
+  # scripts are full of blank lines, so the ordinary case went to CloudStack
+  # unencoded.
+  it "base64-encodes userdata containing a blank line" do
+    data = "#cloud-config\n\npackages:\n - htop\n"
+    opts = options_for(base_config.merge(cloudstack_userdata: data))
+
+    expect(opts[:userdata]).not_to eq(data)
+    expect(Base64.decode64(opts[:userdata])).to eq(data)
+  end
+
+  it "base64-encodes a shell script whose sections are separated by blank lines" do
+    data = "#!/bin/bash\n\necho hello\n"
+    opts = options_for(base_config.merge(cloudstack_userdata: data))
+
+    expect(opts[:userdata]).not_to eq(data)
+    expect(Base64.decode64(opts[:userdata])).to eq(data)
+  end
+
+  it "sends userdata on one line so no line break reaches the query string" do
+    data = "#cloud-config\npackages:\n" + (" - htop\n" * 20)
+    opts = options_for(base_config.merge(cloudstack_userdata: data))
+
+    expect(opts[:userdata]).not_to include("\n")
+    expect(Base64.decode64(opts[:userdata])).to eq(data)
+  end
+
   it "generates a display name from the instance name when none is configured" do
     opts = options_for(base_config, instance_name: "default-ubuntu")
 

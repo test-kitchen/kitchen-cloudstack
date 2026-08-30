@@ -27,9 +27,11 @@ module Kitchen
         # Credential sources, in the order they take precedence.
         SOURCES = %i{keypair generated_password configured_password}.freeze
 
-        # A pem file starting with one of these is a public key, which will
-        # never authenticate. Users hit this by exporting the wrong half.
-        PUBLIC_KEY_PREFIXES = %w{ssh-rsa ssh-dsa ssh-ed25519 ecdsa-sha2-nistp256}.freeze
+        # Every private key format an SSH transport accepts -- PKCS#1, PKCS#8
+        # and OpenSSH's own -- is PEM, so it opens with this. Anything else is
+        # a file that will never authenticate: an exported public key, a PuTTY
+        # .ppk, or the wrong file entirely.
+        PRIVATE_KEY_HEADER = "-----BEGIN".freeze
 
         attr_reader :warnings
 
@@ -125,16 +127,21 @@ module Kitchen
           [config[:keypair_search_directory], working_dir, home, File.join(home.to_s, ".ssh")].compact
         end
 
-        # Warns when the located .pem is a public key.
+        # Warns when the located .pem is not a private key.
         #
         # Exporting the wrong half of a keypair is a common mistake, and the
-        # resulting authentication failure is otherwise hard to read.
+        # resulting authentication failure is otherwise hard to read. This
+        # asks whether the file is a PEM rather than whether it looks like one
+        # of a handful of public key types, so an unusual public key type, a
+        # PuTTY .ppk and an empty file are all caught.
         #
         # @param path [String] the key file to inspect
         # @return [void]
         def warn_unless_private_key(path)
-          first_token = File.read(path).split.first
-          return unless PUBLIC_KEY_PREFIXES.include?(first_token)
+          first_line = File.open(path) do |file|
+            file.each_line.find { |line| !line.strip.empty? }
+          end
+          return if first_line&.start_with?(PRIVATE_KEY_HEADER)
 
           warnings << "SSH key #{path} is not a private key. Please check your kitchen.yml."
         end
